@@ -1,5 +1,22 @@
 .idea/
 pmClient/__pycache__/
+agent/__pycache__/
+agent/brokers/__pycache__/
 .coverage
 tests/__pycache__/
 *.DS_Store
+
+# Secrets and credentials — never commit
+.env
+agent/.tokens.json
+agent/brokers/.zerodha_tokens.json
+agent/brokers/.zerodha_request_token.enc
+
+# Dynamic / generated — changes on every restart
+.tunnel_url
+
+# Runtime output
+logs/
+
+# Personal financial data — keep off version control
+mydata/

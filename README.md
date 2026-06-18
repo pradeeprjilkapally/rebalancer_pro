@@ -1,479 +1,192 @@
-# The Paytm Money Equity 1.1.4 API Python client
+# Portfolio Rebalancing Agent
 
-The official Python client for communicating with [PaytmMoney Equity API](https://www.paytmmoney.com/stocks/).
+A personal finance agent that monitors your equity and mutual fund portfolio across **Paytm Money** and **Zerodha**, tracks FIRE progress, suggests rebalancing actions, and delivers a daily report to WhatsApp — running entirely on your Mac with no cloud dependency.
 
+**You retain full control** — the agent only suggests actions. No trades are placed without your explicit per-trade approval.
 
-# Description
+---
 
-PMClient is a set of REST-like APIs that expose many capabilities required to build a complete investment and
-trading platform. Execute orders in real time, manage user portfolio, stream live market data (WebSockets), and more, with the simple HTTP API collection.
+## What it does
 
+- Fetches live holdings from Paytm Money (equity) and Zerodha (equity + mutual funds + active SIPs)
+- Analyses concentration risk and flags positions that exceed 25% of portfolio
+- Tracks progress toward your FIRE corpus (₹2.25 Cr target at 12% p.a.)
+- Suggests FIRE-aligned investments in underweight categories (mid/small-cap, international, debt)
+- Sends a daily WhatsApp summary at 8 AM IST via Twilio
+- Handles Zerodha re-authentication fully automatically — no manual token copying
 
-[PaytmMoney Technology Pvt Ltd](https://www.paytmmoney.com/) (c) 2022. Licensed under the MIT License.
+---
 
+## Architecture
 
-## Api Documentation
-
-- [PaytmMoney API documentation](https://developer.paytmmoney.com/docs/api/logout/)
-
-## Usage
-
-### Install Package
-##### - User need to clone this repo and add it locally to their project. 
-##### Requirements
-##### - Python version 3.10.1 and
-##### - install the packages 
-```python
-pip3 install -r requirements.txt
+```
+┌──────────────────────────────────────────────────────────┐
+│  Your Mac (3 always-on launchd services)                 │
+│                                                          │
+│  ┌─────────────────────┐   ┌──────────────────────────┐  │
+│  │  daily_review.py    │   │  webhook.py (Flask :5001) │  │
+│  │  fires at 8 AM IST  │   │  /callback  ← Zerodha    │  │
+│  │                     │   │  /whatsapp  ← Twilio     │  │
+│  └────────┬────────────┘   └────────────┬─────────────┘  │
+│           │                             │                │
+│     Paytm Money API             Cloudflare Tunnel        │
+│     Zerodha Kite API            tunnel_manager.py        │
+└───────────┼─────────────────────────────┼────────────────┘
+            │                             │
+            ▼                             ▼
+    Twilio WhatsApp              Public HTTPS URL
+    (daily report +         (Zerodha OAuth callback +
+     auth requests)          Twilio inbound webhook)
 ```
 
+---
 
-### API Usage
+## How the daily review works (8 AM IST)
 
-```python
-from pyPMClient import PMClient
+1. `daily_review.py` wakes via launchd
+2. Loads saved Paytm Money and Zerodha tokens
+3. If Zerodha token is expired → sends a WhatsApp login link → you tap it on your phone → Zerodha login page opens → after login, Zerodha redirects to `/callback` → token is encrypted and saved automatically → you see a green tick page and close the tab
+4. Fetches all holdings across both brokers
+5. Runs concentration and FIRE gap analysis
+6. Writes `mydata/daily_suggestions.txt`
+7. Sends WhatsApp summary
+
+---
+
+## Zerodha re-authentication flow (fully automatic)
+
+Zerodha tokens expire daily around 3:30 AM. When the 8 AM review runs:
+
+```
+8 AM  daily_review detects expired token
+       → WhatsApp sent: "Zerodha Login Required — tap link"
+
+You    tap link on phone → Zerodha login page → log in
+
+        browser redirects to https://[tunnel-url]/callback?request_token=...
+
+/callback  encrypts token immediately (Fernet, PBKDF2 480k iterations)
+           saves to agent/brokers/.zerodha_request_token.enc
+           deletes plaintext from memory
+           shows "Authentication successful ✓" in browser
+
+8 AM+  next daily_review decrypts token → completes session exchange
 ```
 
+The request token never appears in any log file.
 
-##### User needs to create an object of sdk and pass apiKey & apiSecretKey
-```python
-# Initialize PMClient using apiKey and apiSecret.
-pm = PMClient(api_secret="your_api_secret", api_key="your_api_key")
-# Initialize PMClient using apiKey, apiSecret & jwt tokens if user has already generated.
-pm = PMClient(api_secret="your_api_secret", api_key="your_api_key", access_token="access_token", public_access_token="public_access_token", read_access_token="read_access_token")
+---
+
+## What happens when your Mac restarts
+
+The Cloudflare quick tunnel gets a new URL on every restart. The tunnel manager handles this automatically:
+
+1. `tunnel_manager.py` starts, gets new public URL
+2. Saves URL to `.tunnel_url`
+3. Detects the URL changed → updates Twilio webhook URL via API automatically
+4. Sends you a WhatsApp message with the new URL and one manual step:
+   - Update your Zerodha developer app Redirect URL to `[new-url]/callback` (30 seconds at `developers.kite.trade`)
+
+---
+
+## File structure
+
+```
+pyPMClient/
+├── agent/
+│   ├── auth.py              # Paytm Money session management
+│   ├── portfolio.py         # Holdings aggregation (Paytm + Zerodha)
+│   ├── rebalancer.py        # Concentration analysis + trade confirmation
+│   ├── fire_analyser.py     # FIRE progress and gap analysis
+│   ├── whatsapp.py          # Twilio WhatsApp sender + auth notifications
+│   ├── daily_review.py      # 8 AM orchestrator (main entry point)
+│   ├── crypto.py            # Fernet encryption for tokens at rest
+│   ├── webhook.py           # Flask server (/callback + /whatsapp + /health)
+│   ├── tunnel_manager.py    # Cloudflare tunnel lifecycle + change detection
+│   └── brokers/
+│       └── zerodha.py       # Zerodha Kite Connect integration
+├── mydata/
+│   ├── my_investment_suggestions.txt   # Your FIRE roadmap and financial data
+│   └── daily_suggestions.txt          # Written by daily_review at 8 AM
+├── logs/
+│   ├── daily_review.log
+│   ├── webhook.log
+│   └── tunnel.log
+├── .env                     # All secrets — never commit
+├── .tunnel_url              # Current public tunnel URL (auto-managed)
+└── requirements.txt
 ```
 
-##### User can call the login method and get the login URL.
-```python
-# state_key : Variable key which merchant/fintech company expects Paytm Money to return with Request Token. This can be string.
-pm.login(state_key)
+---
+
+## Environment variables (`.env`)
+
+| Variable | Purpose |
+|---|---|
+| `PAYTM_API_KEY` | Paytm Money developer app key |
+| `PAYTM_API_SECRET` | Paytm Money developer app secret |
+| `ZERODHA_API_KEY` | Zerodha Kite Connect app key |
+| `ZERODHA_API_SECRET` | Zerodha Kite Connect app secret |
+| `TWILIO_ACCOUNT_SID` | Twilio account SID |
+| `TWILIO_AUTH_TOKEN` | Twilio auth token |
+| `TWILIO_WHATSAPP_FROM` | Twilio sandbox number (`whatsapp:+14155238886`) |
+| `TWILIO_WHATSAPP_TO` | Your WhatsApp number (`whatsapp:+91XXXXXXXXXX`) |
+| `WEBHOOK_ENCRYPTION_KEY` | Key for Fernet encryption of Zerodha tokens at rest |
+| `WEBHOOK_PORT` | Flask port (default `5001`) |
+
+---
+
+## launchd services
+
+| Label | Runs | Schedule |
+|---|---|---|
+| `com.pradeep.paytm-daily-review` | `daily_review.py` | 8:00 AM IST daily |
+| `com.pradeep.zerodha-webhook` | `webhook.py` | Always on, auto-restarts |
+| `com.pradeep.zerodha-tunnel` | `tunnel_manager.py` | Always on, auto-restarts |
+
+```bash
+# Check status
+launchctl list | grep pradeep
+
+# View live logs
+tail -f logs/daily_review.log
+tail -f logs/webhook.log
+tail -f logs/tunnel.log
+
+# Current public tunnel URL
+cat .tunnel_url
 ```
 
-##### User manually executes a login url in the browser and fetches requestToken after validating username, password, OTP and passcode. 
-##### After a successful login user will be provided the request_token in the URL
+---
 
-##### Once the request_token is obtained you can generate access_token by calling generate_session
-1) User manually executes a login url in the browser and fetches requestToken after validating username, password, OTP and passcode. 
-2) After a successful login user will be provided the request_token in the URL.
-3) Once the request_token is obtained you can generate access_token by calling generate_session.
-```python
-pm.generate_session(request_token="your_request_token")
-```
+## One-time setup checklist
 
-##### After generating the access_token it will get set and any API can be called with same access_token.
+- [x] Paytm Money developer app created, IP whitelisted (`14.98.171.134`)
+- [x] Zerodha Kite Connect app created
+- [x] Twilio WhatsApp sandbox configured, phone number joined
+- [x] cloudflared installed, tunnel running
+- [ ] **Zerodha redirect URL** — go to `developers.kite.trade` → your app → set Redirect URL to `$(cat .tunnel_url)/callback`
+- [ ] **Twilio sandbox webhook** — Twilio Console → Messaging → Try it out → WhatsApp → Sandbox Settings → "When a message comes in" → `$(cat .tunnel_url)/whatsapp`
 
-##### To manually set the jwt tokens, 
-```python
-pm.set_access_token("your_access_token")
-pm.set_public_access_token("your_public_access_token")
-pm.set_read_access_token("your_read_access_token")
-```
+---
 
-### Place Order
-* Here you can place regular, cover and bracket order.
-* For cover order in argument user has to add trigger_price.
-* For bracket order in argument user has to add stoploss_value & profit_value.
-```python
-# Regular Order
-order = pm.place_order(txn_type, exchange, segment, product, security_id, quantity, validity, order_type, price, source, off_mkt_flag)
-```
+## FIRE goal
 
-```python
-# Cover Order
-order = pm.place_order(txn_type, exchange, segment, product, security_id, quantity, validity, order_type, price, source, trigger_price)
-```
+| | |
+|---|---|
+| Target corpus | ₹2,25,00,000 (25× annual expenses of ₹9L) |
+| Monthly investment | ₹1,27,000 |
+| Expected return | 12% p.a. |
+| Estimated years to FIRE | ~8–10 years |
 
-```python
-# Bracket Order
-order = pm.place_order(txn_type, exchange, segment, product, security_id, quantity, validity, order_type, price, source, stoploss_value, profit_value)
-```
+Full allocation breakdown in `mydata/my_investment_suggestions.txt`.
 
-### Modify Order
-* Here you can modify orders.
-* For cover order in argument user has to add leg_no.
-* For bracket order in argument user has to add leg_no & algo_order_no.
-```python
-# Regular Order
-order = pm.modify_order(source, txn_type, exchange, segment, product, security_id, quantity, validity, order_type, price, mkt_type, order_no, serial_no, group_id)
-```
+---
 
-```python
-# Cover Order
-order = pm.modify_order(source, txn_type, exchange, segment, product, security_id, quantity, validity, order_type, price, mkt_type, order_no, serial_no, group_id, leg_no)
-```
+## Security
 
-```python
-# Bracket Order
-order = pm.modify_order(source, txn_type, exchange, segment, product, security_id, quantity, validity, order_type, price, mkt_type, order_no, serial_no, group_id, leg_no, algo_order_no)
-```
-
-### Cancel Order
-* Here you can Cancel Orders.
-* For cover order in argument user has to add leg_no.
-* For bracket order in argument user has to add leg_no & algo_order_no.
-```python
-# Regular Order
-order = pm.cancel_order(source, txn_type, exchange, segment, product, security_id, quantity, validity, order_type, price, mkt_type, order_no, serial_no, group_id)
-```
-
-```python
-# Cover Order
-order = pm.cancel_order(source, txn_type, exchange, segment, product, security_id, quantity, validity, order_type, price, mkt_type, order_no, serial_no, group_id, leg_no)
-```
-
-```python
-# Bracket Order
-order = pm.cancel_order(source, txn_type, exchange, segment, product, security_id, quantity, validity, order_type, price, mkt_type, order_no, serial_no, group_id, leg_no, algo_order_no)
-```
-
-### Convert Order
-* For converting orders.
-```python
-# Regular Order
-order = pm.convert_regular(source, txn_type, exchange, mkt_type, segment, product_from, product_to, quantity, security_id)
-```
-
-
-### Order Details
-* Fetch details of all the order.
-```python
-pm.order_book()
-```
-
-### Trade Details
-* Fetch Trade Details.
-```python
-pm.trade_details(order_no, leg_no, segment)
-```
-
-### Position
-* Get all the positions.
-```python
-pm.position()
-```
-
-### Position Details
-* Get position detail of specific stock.
-```python
-
-pm.position_details(security_id, product, exchange)
-```
-
-### Get Funds History
-* Get the funds history.
-```python
-pm.funds_summary(config)
-```
-
-### Scrip Margin
-* Calculate Scrip Margin.
-```python
-pm.scrips_margin(source, margin_list=[
-                                 "exchange":"exchange",
-                                 "segment":"segment",
-                                 "security_id":"security_id",
-                                 "txn_type":"txn_type",
-                                 "quantity":"quantity",
-                                 "strike_price":"strike_price",
-                                 "trigger_price":"trigger_price",
-                                 "instrument":"instrument"
-                                 ])
-```
-
-### Order Margin
-* Calculate Order Margin.
-```python
-pm.order_margin(source, exchange, segment, security_id, txn_type, quantity, price, product, trigger_price)
-```
-
-### Holdings value
-* Get value of the holdings.
-```python
-pm.holdings_value()
-```
-
-### User Holdings Data
-* Get holdings data of User.
-```python
-pm.user_holdings_data()
-```
-
-### Security Master
-* User can filter by file_name.
-* To get the supported fileName [API Doc for fileNames](https://developer.paytmmoney.com/docs/api/security-master/)
-```python
-pm.security_master(file_name)
-```
-
-### User Details
-* Fetch user details.
-```python
-pm.get_user_details()
-```
-
-### Generate Tpin
-```python
-pm.generate_tpin()
-```
-
-### Validate Tpin
-```python
-pm.validate_tpin(trade_type, isin_list=[])
-```
-
-### Status 
-* user can get the edis_request_id from the response of validate TPIN API.
-```python
-pm.status(edis_request_id)
-```
-
-### Logout
-```python
-pm.logout()
-```
-
-### Create GTT
-* To create a GTT order.
-```python
-pm.create_gtt(segment, exchange, pml_id, security_id, product_type, set_price, transaction_type, order_type, trigger_type, quantity, trigger_price, limit_price)
-```
-
-### Get All GTT
-* To get all GTT or get by pml_id or status.
-```python
-pm.get_gtt_by_pml_id_and_status(status, pml_id)
-```
-
-### Get GTT
-* To get GTT by Id.
-```python
-pm.get_gtt(id)
-```
-
-### Update GTT
-* To update GTT by Id.
-```python
-pm.update_gtt(id, quantity, trigger_price, limit_price, set_price, transaction_type, order_type, trigger_type)
-```
-
-### Delete GTT
-* To Delete GTT by Id.
-```python
-pm.delete_gtt(id)
-```
-
-### Get Expiry
-* To get expiry of the GTT.
-```python
-pm.get_gtt_expiry_date(pml_id)
-```
-
-### Get Aggregate
-* To get the aggregate of the GTTs.
-```python
-pm.get_gtt_aggregate()
-```
-
-### Get GTT InstructionId
-* To GTT by InstructionId.
-```python
-pm.get_gtt_by_instruction_id(id)
-```
-
-### Create GTT V2
-* To create a GTT order.
-* Note : transaction_details is a list of dictionary(key-value pair).
-* Refer below sample requestBody 
-```python
-pm.create_gtt_v2(segment, exchange, security_id, product_type, set_price, transaction_type, trigger_type, transaction_details)
-```
-```python
-# Sample requestBody for OCO trigger_type
-pm.create_gtt_v2(
-        segment = "E",
-        exchange = "BSE",
-        security_id = 500570,
-        product_type = "C",
-        set_price = "702.65",
-        transaction_type = "S",
-        trigger_type = "OCO",
-        transaction_details = [
-            {
-                "sub_type": "STOPLOSS",
-                "trigger_price": "695.60",
-                "order_type": "MKT",
-                "limit_price": 0,
-                "quantity": 1
-            },
-            {
-                "sub_type": "TARGET",
-                "trigger_price": "709.70",
-                "order_type": "MKT",
-                "limit_price": 0,
-                "quantity": 1
-            }
-        ]   
-    )
-```
-```python
-# Sample requestBody for SINGLE trigger_type
-pm.create_gtt_v2(
-    segment = "E",
-    exchange = "BSE",
-    security_id = 500570,
-    product_type = "C",
-    set_price = "709.35",
-    transaction_type = "B",
-    trigger_type = "SINGLE",
-    transaction_details = [
-        {
-            "trigger_price": "702.25",
-            "order_type": "MKT",
-            "limit_price": 0,
-            "quantity": 1
-        }
-    ]
-)
-```
-
-### Get All GTT V2
-* To get all GTT or get by pml_id or status.
-```python
-pm.get_gtt_by_pml_id_and_status_v2(status, pml_id)
-```
-
-### Get GTT V2
-* To get GTT by Id.
-```python
-pm.get_gtt_v2(id)
-```
-
-### Update GTT V2
-* To update GTT by Id.
-* Note : transaction_details is a list of dictionary(key-value pair).
-* Refer below sample requestBody 
-```python
-pm.update_gtt_v2(id, set_price, transaction_type, trigger_type, transaction_details)
-```
-```python
-pm.update_gtt_v2(
-    id=217,
-    set_price = "8.40",
-    transaction_type = "S",
-    trigger_type = "OCO",
-    transaction_details = [
-        {
-            "id": 218,               #For OCO only
-            "sub_type": "STOPLOSS",  #For OCO only
-            "quantity": "2",
-            "trigger_price": "9.0",
-            "limit_price": "15.0",
-            "order_type": "LMT"    
-        },
-        {
-            "id": 219,                #For OCO only
-            "sub_type": "TARGET",   #For OCO only
-            "quantity": "2",
-            "trigger_price": "15.0",
-            "limit_price": "20",
-            "order_type": "LMT"   
-        }
-    ]
-)
-```
-
-### Get GTT InstructionId V2
-* To GTT by InstructionId.
-```python
-pm.get_gtt_by_instruction_id_v2(id)
-```
-
-### Get Live Price via API
-* To Get Live Price Data via API
-```python
-pm.get_live_market_data("mode", preferences)
-```
-
-### Get Option Chain
-* To Get Option Chain using type, symbol and expiry (in DD-MM-YYYY format)
-```python
-pm.get_option_chain("type", "symbol", "expiry")
-```
-
-### Get Option Chain Config
-* To Get Option Chain Config using symbol
-```python
-pm.get_option_chain_config("symbol")
-```
-
-### Get All Orders
-* Get all orders without apiKey filter
-```python
-pm.orders()
-```
-
-### Brokerage, Statutory & Regulatory Levies
-* Get Charges Info
-```python
-pm.charges_info("brokerage_profile_code", "transaction_type", "product_type", "instrument_type", "exchange", qty, price)
-```
-
-### WebSocket Usage
-* To use websocket client in your project, add below code in a python file -
-```python
-from pmClient.WebSocketClient import WebSocketClient
-
-webSocketClient = WebSocketClient("your_public_access_token") # pass your public access token here
-
-customerPreferences = []
-
-preference = {
-    "actionType": 'ADD',  # 'ADD', 'REMOVE'
-    "modeType": 'LTP',  # 'LTP', 'FULL', 'QUOTE'
-    "scripType": 'INDEX',  # 'ETF', 'FUTURE', 'INDEX', 'OPTION', 'EQUITY'
-    "exchangeType": 'NSE',  # 'BSE', 'NSE'
-    "scripId": '13'
-}
-
-# create as many preferences as you like as shown above and append them in customerPreferences array
-
-customerPreferences.append(preference)
-
-
-def on_open():
-    # send preferences via websocket once connection is open
-    webSocketClient.subscribe(customerPreferences)
-
-
-def on_close(code, reason):
-    # this event gets triggered when connection is closed
-    print(code, reason)
-
-
-def on_error(error_message):
-    # this event gets triggered when error occurs
-    print(error_message)
-
-
-def on_message(arr):
-    # this event gets triggered when response is received
-    print(arr)
-
-
-webSocketClient.set_on_open_listener(on_open)
-webSocketClient.set_on_close_listener(on_close)
-webSocketClient.set_on_error_listener(on_error)
-webSocketClient.set_on_message_listener(on_message)
-
-"""
-set below reconnect config if reconnect feature is desired
-Set first param as true and second param, the no. of times retry to connect to server shall be made  
-"""
-webSocketClient.set_reconnect_config(True, 5)
-
-# this method is called to create a websocket connection with broadcast server
-webSocketClient.connect()
-
-# To explicitly close websocket connection with server, call this method
-webSocketClient.disconnect()
-```
+- `.env` is never committed — all secrets stay local
+- Zerodha request tokens are encrypted at rest (Fernet + PBKDF2, 480k iterations) and erased immediately after use
+- Twilio inbound webhook validates every request using `X-Twilio-Signature` — requests from any other source are rejected (HTTP 403)
+- Cloudflare tunnel uses QUIC (encrypted); Cloudflare handles TLS termination before forwarding to local Flask on `localhost`
+- No trades execute without explicit per-trade confirmation in the terminal
