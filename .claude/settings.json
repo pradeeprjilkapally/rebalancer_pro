@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '=== task.md — start-of-session review ==='; cat task.md 2>/dev/null || echo '(task.md not found)'; echo; echo '=== action_items.md — start-of-session review ==='; cat action_items.md 2>/dev/null || echo '(action_items.md not found)'",
+            "shell": "bash"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -f task.md ] || exit 0; awk '/<!--/{inc=1;next} /-->/{inc=0;next} inc==0 && /^[[:space:]]*Goal:/{found=1} END{exit found?0:1}' task.md || echo '{\"systemMessage\":\"rebalancer_pro task.md: every task section is closed/commented but no blank template follows. Per the file lifecycle, append a fresh empty template (Date/Status/Task/Goal/Constraints/Inputs/Outputs/Done-check/Out-of-scope) for the next task.\"}'",
+            "shell": "bash"
+          }
+        ]
+      }
+    ]
+  }
+}

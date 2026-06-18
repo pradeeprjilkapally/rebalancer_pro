@@ -17,6 +17,7 @@ agent/brokers/.zerodha_request_token.enc
 
 # Runtime output
 logs/
+testplans/
 
 # Personal financial data — keep off version control
 mydata/
