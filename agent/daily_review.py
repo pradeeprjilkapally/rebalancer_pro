@@ -5,6 +5,7 @@ Daily portfolio review.
   --broker zerodha → Zerodha only      (scheduled 8:00 AM IST)
 """
 import argparse
+import json
 import os
 import sys
 from datetime import datetime
@@ -19,6 +20,40 @@ from agent.fire_analyser import analyse_fire, fire_aligned_suggestions
 from agent.whatsapp import send_whatsapp
 
 _MYDATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'mydata')
+
+
+def _manual_corpus_totals() -> tuple[float, float]:
+    """Return (manual_mf_value, manual_gold_value) from live prices + manual_holdings.json."""
+    try:
+        import json as _json
+        manual_file = os.path.join(_MYDATA, 'manual_holdings.json')
+        if not os.path.exists(manual_file):
+            return 0.0, 0.0
+        manual = _json.load(open(manual_file))
+
+        mf_value = 0.0
+        mf_entries = [m for m in manual.get('mutual_funds', []) if float(m.get('units', 0) or 0) > 0]
+        if mf_entries:
+            from agent.manual_holdings import _fetch_navs_amfi
+            codes   = [str(m.get('scheme_code', '')).strip() for m in mf_entries]
+            nav_map = _fetch_navs_amfi(codes)
+            for m, code in zip(mf_entries, codes):
+                nav = nav_map.get(code, 0)
+                if nav:
+                    mf_value += float(m.get('units', 0)) * nav
+
+        gold_value = 0.0
+        from agent.gold_price import get_price as gold_price
+        gprice = gold_price()
+        for g in manual.get('gold', []):
+            grams = float(g.get('grams', 0) or 0)
+            if grams > 0 and gprice:
+                gold_value += grams * gprice
+
+        return mf_value, gold_value
+    except Exception as e:
+        print(f'  [review] manual corpus fetch failed: {e}')
+        return 0.0, 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +127,27 @@ def _write_file(broker: str, snapshot: dict, rebalance: list, fire: dict, fire_s
     with open(path, 'w') as f:
         f.write(content)
     print(f"  Suggestions written to: {path}")
+
+    label = 'Paytm Money' if broker == 'paytm' else 'Zerodha'
+    json_data = {
+        'broker':       broker,
+        'label':        label,
+        'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M IST'),
+        'snapshot':     snapshot,
+        'fire':         fire,
+        'rebalance':    rebalance,
+        'fire_sugg':    fire_sugg,
+    }
+    # Encrypted at rest — only the webhook (with WEBHOOK_ENCRYPTION_KEY) can read it.
+    from agent.crypto import write_encrypted
+    enc_path = os.path.join(_MYDATA, f'{broker}_data.json.enc')
+    write_encrypted(enc_path, json_data)
+    # Remove any stale plaintext snapshot from before encryption was enabled.
+    legacy = os.path.join(_MYDATA, f'{broker}_data.json')
+    if os.path.exists(legacy):
+        os.remove(legacy)
+    print(f"  Dashboard data written (encrypted) to: {enc_path}")
+
     return content
 
 
@@ -100,50 +156,30 @@ def _write_file(broker: str, snapshot: dict, rebalance: list, fire: dict, fire_s
 # ---------------------------------------------------------------------------
 
 def _format_whatsapp(broker: str, snapshot: dict, rebalance: list, fire: dict, fire_sugg: list) -> str:
-    label    = 'Paytm Money' if broker == 'paytm' else 'Zerodha'
-    holdings = snapshot['holdings']
-    lines    = [
-        f"*{label} — Daily Portfolio Review*",
-        f"Total: ₹{snapshot['total_portfolio']:,.0f}  |  Cash: ₹{snapshot['available_cash']:,.0f}",
-        "",
-        "*Holdings:*",
+    label        = 'Paytm Money' if broker == 'paytm' else 'Zerodha'
+    holdings     = snapshot['holdings']
+    total_sugg   = len(rebalance) + len(fire_sugg)
+    dashboard_url = 'https://portfolio-relay.pradeeprjilkapally.workers.dev/dashboard_main'
+
+    # Top 2 movers by absolute P&L
+    sorted_h = sorted(holdings, key=lambda h: abs(h.get('unrealised_pnl', 0)), reverse=True)
+    movers = []
+    for h in sorted_h[:2]:
+        pnl = h.get('unrealised_pnl', 0)
+        sign = '+' if pnl >= 0 else '-'
+        movers.append(f"{h['name']} ({sign}₹{abs(pnl):,.0f})")
+
+    lines = [
+        f"*{label} — Morning Review Ready*",
+        f"Total: ₹{snapshot['total_portfolio']:,.0f}  |  FIRE: {fire['progress_pct']:.1f}%  |  ~{fire['years_to_fire']:.1f} yrs",
+        f"Holdings: {len(holdings)}  |  Suggestions: {total_sugg}",
     ]
-    for h in holdings:
-        sign = "+" if h['unrealised_pnl'] >= 0 else ""
-        lines.append(
-            f"• {h['name']}: {h['quantity']:.0f} units @ ₹{h['ltp']:,.2f}"
-            f"  ({sign}₹{h['unrealised_pnl']:,.0f})  [{h['allocation_pct']:.1f}%]"
-        )
-
-    sips = snapshot.get('sips', [])
-    if sips:
-        lines += ["", "*Active SIPs:*"]
-        for s in sips:
-            lines.append(f"• {s['fund']}: ₹{s['monthly_amount']:,.0f}/month")
-
+    if movers:
+        lines.append(f"Top movers: {' · '.join(movers)}")
     lines += [
         "",
-        "*FIRE Progress:*",
-        f"Target : ₹{fire['target']:,.0f}",
-        f"Current: ₹{fire['current']:,.0f}  ({fire['progress_pct']:.1f}%)",
-        f"Gap    : ₹{fire['gap']:,.0f}",
-        f"Est.   : ~{fire['years_to_fire']:.1f} yrs to FIRE",
+        f"View full details: {dashboard_url}",
     ]
-
-    all_sugg = rebalance + [
-        {'action': 'ADD SIP', 'name': s['instrument'],
-         'quantity': 1, 'estimated_value': s['suggested_sip'], 'reason': s['reason']}
-        for s in fire_sugg
-    ]
-    if all_sugg:
-        lines += ["", "*Suggestions:*"]
-        for s in all_sugg[:4]:
-            lines.append(f"• {s['action']} {s['quantity']}× {s['name']}  (~₹{s['estimated_value']:,.0f})")
-            lines.append(f"  _{s['reason']}_")
-    else:
-        lines += ["", "*No rebalancing needed today.*"]
-
-    lines += ["", "_Reply to authorize any trade._"]
     return "\n".join(lines)
 
 
@@ -155,6 +191,13 @@ def run_paytm():
     from pmClient.pmClient import PMClient
     from agent.auth import setup_session
     from agent.portfolio import build_snapshot
+    from agent.preflight import validate_all
+
+    status = validate_all()
+    if not status['paytm']['ok']:
+        print(f"  [preflight] Paytm session invalid — {status['paytm']['detail']}")
+    else:
+        print(f"  [preflight] Paytm session OK")
 
     api_key    = os.getenv('PAYTM_API_KEY', '').strip()
     api_secret = os.getenv('PAYTM_API_SECRET', '').strip()
@@ -173,9 +216,10 @@ def run_paytm():
         sys.exit(0)
 
     print_portfolio(snapshot)
-    rebalance  = analyse(snapshot)
-    fire_data  = analyse_fire(snapshot)
-    fire_sugg  = fire_aligned_suggestions(snapshot)
+    rebalance            = analyse(snapshot)
+    fire_data            = analyse_fire(snapshot)
+    manual_mf, manual_gold = _manual_corpus_totals()
+    fire_sugg            = fire_aligned_suggestions(snapshot, manual_mf=manual_mf, manual_gold=manual_gold)
     print_suggestions(rebalance)
 
     print(f"\n  FIRE: {fire_data['progress_pct']:.1f}% — ~{fire_data['years_to_fire']:.1f} yrs to go")
@@ -193,6 +237,15 @@ def run_zerodha():
     from agent.portfolio import build_snapshot
     from pmClient.pmClient import PMClient
     from agent.auth import setup_session
+    from agent.preflight import validate_all
+
+    status = validate_all()
+    if not status['zerodha']['ok']:
+        print(f"  [preflight] Zerodha session invalid — {status['zerodha']['detail']}")
+    else:
+        print(f"  [preflight] Zerodha session OK")
+    if not status['tunnel']['ok']:
+        print(f"  [preflight] Tunnel down — {status['tunnel']['detail']} — callback auth will fail")
 
     kite = get_kite_client()
     if not kite:
@@ -237,9 +290,10 @@ def run_zerodha():
     }
 
     print_portfolio(snapshot)
-    rebalance  = analyse(snapshot)
-    fire_data  = analyse_fire(snapshot)
-    fire_sugg  = fire_aligned_suggestions(snapshot)
+    rebalance              = analyse(snapshot)
+    fire_data              = analyse_fire(snapshot)
+    manual_mf, manual_gold = _manual_corpus_totals()
+    fire_sugg              = fire_aligned_suggestions(snapshot, manual_mf=manual_mf, manual_gold=manual_gold)
     print_suggestions(rebalance)
 
     print(f"\n  FIRE: {fire_data['progress_pct']:.1f}% — ~{fire_data['years_to_fire']:.1f} yrs to go")

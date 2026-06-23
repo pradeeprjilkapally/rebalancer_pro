@@ -21,6 +21,38 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"$CLAUDE_TOOL_INPUT\" | python3 -c \"\nimport sys, re, os, json\ncmd = sys.stdin.read()\nif 'git commit' not in cmd:\n    sys.exit(0)\ntask_id = ''\nif os.path.exists('task.md'):\n    m = re.search(r'^Task:\\s+(\\S+)', open('task.md').read(), re.MULTILINE)\n    if m:\n        task_id = m.group(1)\nif task_id:\n    print(json.dumps({'systemMessage': f'Active task: {task_id}. Prefix this commit message with the task ID — format: \\\"{task_id} - <what changed and why>\\\".'}))\nelse:\n    print(json.dumps({'systemMessage': 'No active task ID found in task.md. Use format: \\\"<type> - <what changed and why>\\\" (e.g. fix - ..., chore - ..., feat - ...).'}))\n\" 2>/dev/null || true",
+            "shell": "bash"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"systemMessage\":\"Anti-slop check: no generic placeholders, no TODO comments, no filler copy, no invented values. Every change must be purposeful and match the existing code style. If unsure, read the file first.\"}'",
+            "shell": "bash"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"systemMessage\":\"Anti-slop check: no generic placeholders, no TODO comments, no filler copy, no invented values. Every change must be purposeful and match the existing code style. If unsure, read the file first.\"}'",
+            "shell": "bash"
+          }
+        ]
+      }
     ]
   }
 }

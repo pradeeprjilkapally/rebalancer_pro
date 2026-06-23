@@ -9,11 +9,15 @@ tests/__pycache__/
 # Secrets and credentials — never commit
 .env
 agent/.tokens.json
+agent/.tokens.json.enc
 agent/brokers/.zerodha_tokens.json
 agent/brokers/.zerodha_request_token.enc
+*.enc
 
 # Dynamic / generated — changes on every restart
 .tunnel_url
+agent/.whatsapp_state.json
+agent/.paytm_auth_pending
 
 # Runtime output
 logs/

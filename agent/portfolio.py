@@ -63,13 +63,22 @@ def fetch_holdings(pm) -> List[dict]:
     return holdings
 
 
-def build_snapshot(pm, zerodha_data: dict | None = None) -> dict:
+def build_snapshot(pm, zerodha_data: dict | None = None, include_manual: bool = True) -> dict:
     """Return a complete portfolio snapshot with allocation percentages.
 
     zerodha_data: optional dict from agent.brokers.zerodha.fetch_all()
     """
     print("  Fetching Paytm Money holdings...")
     holdings = fetch_holdings(pm)
+
+    # Merge manual holdings (MF + Gold) — pass partial snapshot for gold price
+    if include_manual:
+        from agent.manual_holdings import load as load_manual
+        partial = {'holdings': holdings}
+        manual = load_manual(snapshot=partial)
+        if manual:
+            print(f"  Merging {len(manual)} manual holding(s) (MF/Gold)...")
+            holdings.extend(manual)
 
     # Merge Zerodha equity + MF holdings if available
     if zerodha_data:

@@ -49,26 +49,42 @@ def analyse_fire(snapshot: dict) -> dict:
     }
 
 
-def fire_aligned_suggestions(snapshot: dict) -> list:
+def fire_aligned_suggestions(
+    snapshot: dict,
+    manual_mf: float = 0.0,
+    manual_gold: float = 0.0,
+) -> list:
     """
     Returns FIRE-aligned investment suggestions based on allocation gaps.
-    These are additive (buy) suggestions, not rebalancing sells.
+
+    manual_mf   — current value of manually-tracked mutual funds (e.g. ICICI Multi-Asset)
+    manual_gold — current value of manually-tracked gold (e.g. Paytm Gold)
+
+    Both are included in the total corpus denominator so allocation percentages
+    reflect the full portfolio, not just broker equity.
     """
-    total = snapshot['total_portfolio']
+    broker_total = snapshot['total_portfolio']
+    total = broker_total + manual_mf + manual_gold
     if total <= 0:
         return []
 
-    # Compute current category allocations
-    gold_value    = sum(h['current_value'] for h in snapshot['holdings']
-                        if any(k in h['name'].upper() for k in ('GOLD', 'BEES')))
-    equity_value  = snapshot['total_equity'] - gold_value
+    # Broker gold (Gold Bees ETF in equity holdings)
+    broker_gold  = sum(h['current_value'] for h in snapshot['holdings']
+                       if any(k in h['name'].upper() for k in ('GOLD', 'BEES')))
+    total_gold   = broker_gold + manual_gold
 
+    # Broker pure equity (exclude Gold Bees)
+    broker_equity = snapshot['total_equity'] - broker_gold
+
+    # ICICI Multi-Asset is counted in the total but not in any single category bucket;
+    # it already provides internal equity/debt/gold diversification.
+    # For category allocation gaps we compare against the full-corpus denominator.
     allocations = {
-        'large_cap':    equity_value / total * 100,
-        'gold':         gold_value / total * 100,
-        'mid_small':    0.0,   # no mid/small cap detected yet
-        'international':0.0,   # no international detected yet
-        'debt':         0.0,   # debt not tracked yet
+        'large_cap':     broker_equity / total * 100,
+        'gold':          total_gold / total * 100,
+        'mid_small':     0.0,
+        'international': 0.0,
+        'debt':          0.0,
     }
 
     targets = {
@@ -88,7 +104,7 @@ def fire_aligned_suggestions(snapshot: dict) -> list:
             'current_pct': allocations['mid_small'],
             'target_pct': targets['mid_small'],
             'suggested_sip': 8_000,
-            'reason': f"Underweight: {allocations['mid_small']:.1f}% vs target {targets['mid_small']:.0f}%",
+            'reason': f"Underweight: {allocations['mid_small']:.1f}% vs target {targets['mid_small']:.0f}% (full portfolio basis)",
         })
 
     if allocations['international'] < targets['international']:
@@ -98,7 +114,7 @@ def fire_aligned_suggestions(snapshot: dict) -> list:
             'current_pct': allocations['international'],
             'target_pct': targets['international'],
             'suggested_sip': 5_000,
-            'reason': f"Underweight: {allocations['international']:.1f}% vs target {targets['international']:.0f}%",
+            'reason': f"Underweight: {allocations['international']:.1f}% vs target {targets['international']:.0f}% (full portfolio basis)",
         })
 
     if allocations['debt'] < targets['debt']:
@@ -108,7 +124,7 @@ def fire_aligned_suggestions(snapshot: dict) -> list:
             'current_pct': allocations['debt'],
             'target_pct': targets['debt'],
             'suggested_sip': 10_000,
-            'reason': f"Underweight: {allocations['debt']:.1f}% vs target {targets['debt']:.0f}%",
+            'reason': f"Underweight: {allocations['debt']:.1f}% vs target {targets['debt']:.0f}% (full portfolio basis)",
         })
 
     if allocations['gold'] > targets['gold'] + 5:

@@ -98,8 +98,20 @@ Every task delivery ends with: **verified / not-verified / known-issues** stated
 
 ---
 
-## Conventions
+## Working conventions
 
+**Task intake (`jarvis`)** — Pradeep files feature/fix requests in `task.md` (repo root) using the template fields (Date, Goal, Constraints, Inputs, Outputs, Done-check, Out-of-scope), then types `jarvis`. On that trigger, read `task.md` and start the task without further prompting.
+- Lifecycle: completed task → comment out the section with `Status: complete <date> — <result>`, append a fresh blank template below the separator. Parked task → `Status: pending — parked <date>`, stays visible, fresh template added below.
+- At the start of each session, show the current `task.md` state for review.
+- Task numbering: `<NN>-<DDMMYY>` — `NN` resets to `01` for the first task each new day.
+
+**Action items (`ledger`)** — Non-functional / process work (config steps, pushes, deferred items, tooling) goes in `action_items.md` (not `task.md`). Typing `ledger` reads the file, shows the Open items, and acts on / updates whatever Pradeep points to.
+- After finishing any task, append leftover follow-ups (pending push, config step, deferred sub-item) to `action_items.md` automatically.
+- When Pradeep types `exit`, ask whether to review the open action items before closing; on "yes", list them.
+
+**Push** — never push automatically. Always add a push item to `action_items.md` and remind Pradeep to run `git push rebalancer master`.
+
+**Code conventions**
 - **Notifications** — `send_whatsapp()` must never block the main flow. In scheduled jobs, wrap in `threading.Thread(target=send_whatsapp, args=(msg,), daemon=True).start()` if needed.
 - **Input validation** — at webhook/CLI boundaries: validate → normalize → act. Never trust raw Twilio webhook bodies without signature check (`TWILIO_AUTH_TOKEN`).
 - **Scheduled jobs** — all jobs wrapped in `try/except Exception as e: print(f"[cron] {e}")`. IST→UTC conversion documented as a comment on every schedule expression.

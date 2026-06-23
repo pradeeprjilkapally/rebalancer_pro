@@ -16,8 +16,9 @@ from typing import List
 
 from kiteconnect import KiteConnect
 
-TOKEN_FILE           = os.path.join(os.path.dirname(__file__), '.zerodha_tokens.json')
+TOKEN_FILE             = os.path.join(os.path.dirname(__file__), '.zerodha_tokens.json')
 ENC_REQUEST_TOKEN_FILE = os.path.join(os.path.dirname(__file__), '.zerodha_request_token.enc')
+PENDING_FILE           = os.path.join(os.path.dirname(__file__), '.zerodha_auth_pending')
 
 
 # ---------------------------------------------------------------------------
@@ -36,6 +37,16 @@ def _load_tokens() -> dict:
     return {}
 
 
+def mark_pending(login_url: str):
+    with open(PENDING_FILE, 'w') as f:
+        f.write(login_url)
+
+
+def clear_pending():
+    if os.path.exists(PENDING_FILE):
+        os.remove(PENDING_FILE)
+
+
 def get_kite_client() -> KiteConnect | None:
     """Return an authenticated KiteConnect client, or None on failure."""
     api_key    = os.getenv('ZERODHA_API_KEY', '').strip()
@@ -52,6 +63,7 @@ def get_kite_client() -> KiteConnect | None:
         kite.set_access_token(tokens['access_token'])
         try:
             kite.profile()
+            clear_pending()   # auth is good — no pending action needed
             return kite
         except Exception:
             print("  [Zerodha] Saved token expired — re-authenticating...")
@@ -81,15 +93,15 @@ def _login_flow(kite: KiteConnect, api_secret: str) -> KiteConnect | None:
     headless = not sys.stdin.isatty()
 
     if headless:
-        # Running as a background job — send login link to WhatsApp
-        print(f"  [Zerodha] Headless mode — sending auth link to WhatsApp.")
+        mark_pending(login_url)
+        print(f"  [Zerodha] Headless mode — sending auth ping to WhatsApp.")
         print(f"  [Zerodha] Login URL: {login_url}")
         try:
-            from agent.whatsapp import send_zerodha_auth_required
-            send_zerodha_auth_required(login_url)
+            from agent.whatsapp import send_auth_ping
+            send_auth_ping(['Zerodha'])
         except Exception as e:
             print(f"  [Zerodha] WhatsApp send failed: {e}")
-        print("  [Zerodha] Skipping Zerodha for today's review. Authenticate and re-run.")
+        print("  [Zerodha] Review skipped — waiting for YES reply.")
         return None
 
     # Interactive (TTY) mode
@@ -112,6 +124,7 @@ def _exchange_token(kite: KiteConnect, api_secret: str, request_token: str) -> K
         session = kite.generate_session(request_token, api_secret=api_secret)
         kite.set_access_token(session['access_token'])
         _save_tokens({'access_token': session['access_token']})
+        clear_pending()
         print("  [Zerodha] Login successful.")
         return kite
     except Exception as e:

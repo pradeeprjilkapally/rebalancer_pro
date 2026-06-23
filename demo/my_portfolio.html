@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Portfolio — Wealth Command</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#070b14; --panel:#0e1626; --panel2:#101a2e; --line:#1c2942;
+  --txt:#e7eefb; --mut:#7d8db0; --mut2:#566184;
+  --gold:#f5c451; --gold2:#ffd97a; --teal:#34d8c4; --green:#3ddc84;
+  --red:#ff6b7a; --blue:#5aa9ff; --violet:#b18cff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:radial-gradient(1200px 700px at 80% -10%,#13203a 0%,var(--bg) 55%),
+             radial-gradient(900px 600px at -10% 110%,#15132c 0%,rgba(0,0,0,0) 60%),var(--bg);
+  color:var(--txt);font-family:'Inter',system-ui,sans-serif;min-height:100vh;
+  -webkit-font-smoothing:antialiased;letter-spacing:.1px;
+}
+.mono{font-family:'JetBrains Mono',monospace}
+.wrap{max-width:1240px;margin:0 auto;padding:0 28px 80px}
+header{position:sticky;top:0;z-index:40;backdrop-filter:blur(14px);background:rgba(7,11,20,.72);border-bottom:1px solid var(--line)}
+.bar{max-width:1240px;margin:0 auto;padding:16px 28px;display:flex;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--gold),#c9962f);color:#1a1305;font-weight:800;font-size:20px;
+  box-shadow:0 6px 22px rgba(245,196,81,.28)}
+.brand b{font-size:17px;font-weight:700;letter-spacing:.2px}
+.brand span{display:block;font-size:11px;color:var(--mut);font-weight:500;margin-top:1px}
+.barright{display:flex;align-items:center;gap:18px}
+.live{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--green);font-weight:600}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(61,220,132,.6);animation:pp 2s infinite}
+@keyframes pp{0%{box-shadow:0 0 0 0 rgba(61,220,132,.55)}70%{box-shadow:0 0 0 9px rgba(61,220,132,0)}100%{box-shadow:0 0 0 0 rgba(61,220,132,0)}}
+.clock{font-size:12px;color:var(--mut)}
+.avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#2a3a5c,#1a2438);
+  display:grid;place-items:center;font-size:13px;font-weight:700;color:var(--txt);border:1px solid var(--line)}
+.hero{padding:38px 0 26px}
+.hero h1{font-size:13px;color:var(--mut);font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:10px}
+.totalrow{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap}
+.total{font-size:54px;font-weight:800;line-height:1;letter-spacing:-1px}
+.total .rs{color:var(--gold);font-weight:700;margin-right:4px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:10px;font-size:14px;font-weight:700;
+  background:rgba(61,220,132,.12);color:var(--green);border:1px solid rgba(61,220,132,.22);margin-bottom:6px}
+.chip.dn{background:rgba(255,107,122,.1);color:var(--red);border-color:rgba(255,107,122,.22)}
+.sub{margin-top:9px;font-size:13px;color:var(--mut)}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:8px 0 30px}
+.kpi{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+  border-radius:16px;padding:18px 18px 16px;position:relative;overflow:hidden}
+.kpi::after{content:'';position:absolute;inset:0;border-radius:16px;
+  background:radial-gradient(120px 60px at 100% 0%,rgba(245,196,81,.07),transparent 70%);pointer-events:none}
+.kpi .k{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.kpi .v{font-size:27px;font-weight:800;margin-top:9px;letter-spacing:-.4px}
+.kpi .d{font-size:12px;margin-top:6px;font-weight:600;display:flex;align-items:center;gap:5px}
+.up{color:var(--green)} .down{color:var(--red)}
+.kpi .ico{position:absolute;top:16px;right:16px;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+  font-size:15px;background:rgba(90,169,255,.1);color:var(--blue)}
+.kpi.g .ico{background:rgba(245,196,81,.12);color:var(--gold)}
+.kpi.t .ico{background:rgba(52,216,196,.12);color:var(--teal)}
+.kpi.v2 .ico{background:rgba(177,140,255,.12);color:var(--violet)}
+.grid{display:grid;gap:16px}
+.g-2{grid-template-columns:1.7fr 1fr}
+.g-2b{grid-template-columns:1fr 1fr}
+.panel{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:18px;padding:22px}
+.ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.ph h2{font-size:15px;font-weight:700}
+.ph .meta{font-size:12px;color:var(--mut)}
+.chartbox{position:relative;height:260px;margin-top:14px}
+.chartbox canvas{width:100%;height:100%}
+.tooltip{position:absolute;pointer-events:none;background:#0a1322;border:1px solid var(--line);border-radius:10px;
+  padding:9px 12px;font-size:12px;opacity:0;transition:opacity .12s;transform:translate(-50%,-115%);white-space:nowrap;z-index:5;
+  box-shadow:0 10px 30px rgba(0,0,0,.45)}
+.tooltip b{font-size:14px;display:block;margin-top:2px}
+.alloc{display:flex;gap:20px;align-items:center;margin-top:6px}
+.donutwrap{position:relative;flex-shrink:0}
+.donutctr{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+.donutctr .dv{font-size:21px;font-weight:800}
+.donutctr .dl{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;margin-top:1px}
+.alist{flex:1;display:flex;flex-direction:column;gap:11px}
+.arow{display:flex;align-items:center;gap:10px;font-size:13px}
+.dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.arow .nm{flex:1;color:var(--txt)}
+.arow .pc{color:var(--mut);font-weight:600;font-variant-numeric:tabular-nums}
+.arow .am{color:var(--mut2);font-size:12px;font-variant-numeric:tabular-nums;min-width:78px;text-align:right}
+table{width:100%;border-collapse:collapse;margin-top:8px}
+th{text-align:left;font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;font-weight:600;padding:11px 12px;border-bottom:1px solid var(--line)}
+th.r,td.r{text-align:right}
+td{padding:13px 12px;border-bottom:1px solid rgba(28,41,66,.5);font-size:13.5px;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+tbody tr{transition:background .15s}
+tbody tr:hover{background:rgba(90,169,255,.04)}
+.sym{display:flex;align-items:center;gap:11px}
+.tk{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-weight:800;font-size:12px;flex-shrink:0;color:#0b1018}
+.sym .nm{font-weight:600} .sym .ex{font-size:11px;color:var(--mut);margin-top:1px}
+.pnl{font-weight:700}
+.tag{display:inline-block;padding:3px 8px;border-radius:7px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
+.tag.up{background:rgba(61,220,132,.12);color:var(--green)}
+.tag.dn{background:rgba(255,107,122,.1);color:var(--red)}
+.fire{display:flex;gap:26px;align-items:center;margin-top:6px;flex-wrap:wrap}
+.firering{position:relative;flex-shrink:0}
+.firectr{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+.firectr .fp{font-size:28px;font-weight:800;color:var(--gold)}
+.firectr .fl{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.6px}
+.firestats{flex:1;min-width:230px}
+.fstat{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid rgba(28,41,66,.6);font-size:13px}
+.fstat:last-child{border:none}
+.fstat .l{color:var(--mut)} .fstat .v{font-weight:700;font-variant-numeric:tabular-nums}
+.snap-badge{position:fixed;bottom:18px;right:18px;z-index:50;font-size:11px;font-weight:700;letter-spacing:.5px;
+  background:rgba(52,216,196,.1);color:var(--teal);border:1px solid rgba(52,216,196,.3);padding:8px 14px;border-radius:30px;backdrop-filter:blur(8px)}
+.sechead{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.7px;font-weight:700;margin:34px 4px 14px}
+.maskbtn{display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:9px;border:1px solid var(--line);
+  background:transparent;color:var(--mut);font:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:.15s}
+.maskbtn:hover{color:var(--txt);border-color:#3a4b73}
+.maskbtn svg{width:16px;height:16px;display:block}
+body.masked .money{filter:blur(7px);opacity:.5;user-select:none;transition:filter .12s}
+.money{transition:filter .12s}
+@media(max-width:980px){.kpis{grid-template-columns:repeat(2,1fr)}.g-2,.g-2b{grid-template-columns:1fr}.total{font-size:42px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <div class="brand">
+      <div class="logo">₹</div>
+      <div><b>Wealth Command</b><span>Pradeep · Personal Portfolio</span></div>
+    </div>
+    <div class="barright">
+      <div class="live"><i></i> Synced</div>
+      <div class="clock mono" id="clock">--:--:--</div>
+      <button class="maskbtn" id="maskbtn" onclick="toggleMask()" title="Hide / show amounts">
+        <svg id="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg id="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      </button>
+      <div class="avatar">PJ</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- HERO -->
+  <section class="hero">
+    <h1>Total Portfolio Value</h1>
+    <div class="totalrow">
+      <div class="total money"><span class="rs">₹</span><span id="total">0</span></div>
+      <div class="chip money" id="retchip">▲ ₹31,254 &nbsp;(+4.81%)</div>
+    </div>
+    <div class="sub">As of 23 Jun 2026, 12:35 PM IST · Paytm Money + manual holdings · 4 instruments</div>
+  </section>
+
+  <!-- FIRE Goal (top, centered) -->
+  <section class="panel" style="margin:8px 0 16px">
+    <div class="ph" style="justify-content:center;text-align:center"><div><h2>FIRE Goal Progress</h2><div class="meta">Financial Independence · ₹2.25 Cr target</div></div></div>
+    <div class="fire" style="justify-content:center">
+      <div class="firering"><canvas id="firering" width="160" height="160"></canvas>
+        <div class="firectr"><div><div class="fp" id="firepct">0%</div><div class="fl">Complete</div></div></div>
+      </div>
+      <div class="firestats" style="max-width:420px">
+        <div class="fstat"><span class="l">Current corpus</span><span class="v money" style="color:var(--gold)">₹6,80,830</span></div>
+        <div class="fstat"><span class="l">Target corpus</span><span class="v money">₹2,25,00,000</span></div>
+        <div class="fstat"><span class="l">Gap remaining</span><span class="v money" style="color:var(--red)">₹2,18,19,170</span></div>
+        <div class="fstat"><span class="l">Est. time to FIRE</span><span class="v" style="color:var(--teal)">8.2 years</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Projection + Allocation -->
+  <section class="grid g-2">
+    <div class="panel">
+      <div class="ph">
+        <div><h2>Wealth Projection</h2><div class="meta">Corpus path to FIRE · 12% p.a. + ₹1.27L/mo SIP</div></div>
+        <div class="meta mono" style="color:var(--gold)">Target ₹2.25 Cr</div>
+      </div>
+      <div class="chartbox"><canvas id="proj"></canvas><div class="tooltip" id="tt"></div></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><div><h2>Asset Allocation</h2><div class="meta">By category</div></div></div>
+      <div class="alloc">
+        <div class="donutwrap"><canvas id="donut" width="170" height="170"></canvas>
+          <div class="donutctr"><div><div class="dv money">₹6.81<span style="font-size:13px">L</span></div><div class="dl">Total</div></div></div>
+        </div>
+        <div class="alist" id="alist"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Holdings -->
+  <div class="sechead">Holdings</div>
+  <section class="panel" style="padding:8px 6px">
+    <table>
+      <thead><tr>
+        <th>Instrument</th><th class="r">Price</th><th class="r">Qty</th>
+        <th class="r">Value</th><th class="r">Allocation</th><th class="r">Total P&L</th>
+      </tr></thead>
+      <tbody id="holdings"></tbody>
+    </table>
+  </section>
+
+  <!-- Funds/SIP -->
+  <div class="sechead">Funds &amp; SIPs</div>
+  <section class="panel" style="padding:8px 6px">
+    <table>
+      <thead><tr><th>Instrument</th><th class="r">Value</th><th class="r">Returns</th><th class="r">SIP</th></tr></thead>
+      <tbody id="funds"></tbody>
+    </table>
+  </section>
+
+</div>
+
+<div class="snap-badge">● LIVE SNAPSHOT · 23 JUN 2026</div>
+
+<script>
+const PI=Math.PI;
+function inr(n){n=Math.round(n);const neg=n<0;n=Math.abs(n);let s=String(n);if(s.length<=3)return(neg?'-':'')+s;
+  let r=s.slice(-3),rem=s.slice(0,-3);while(rem.length>2){r=rem.slice(-2)+','+r;rem=rem.slice(0,-2);}return(neg?'-':'')+(rem?rem+',':'')+r;}
+function tick(){document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-IN',{hour12:false});}
+setInterval(tick,1000);tick();
+
+/* count-up total */
+(function(){const el=document.getElementById('total'),target=680830,dur=1300,t0=performance.now();
+  function step(now){const p=Math.min((now-t0)/dur,1),e=1-Math.pow(1-p,3);el.textContent=inr(Math.round(target*e));if(p<1)requestAnimationFrame(step);}
+  requestAnimationFrame(step);})();
+
+/* ── privacy mask ────────────────────────────────────────────── */
+let _masked=false;
+function toggleMask(){
+  _masked=!_masked;
+  document.body.classList.toggle('masked',_masked);
+  document.getElementById('eye-open').style.display=_masked?'none':'block';
+  document.getElementById('eye-off').style.display=_masked?'block':'none';
+}
+
+/* ── wealth projection chart ─────────────────────────────────── */
+const PROJ=[680830,949785,1224146,1504021,1789522,2080761,2377854,2680919,2990076,3305446,3627156,3955332,4290104,4631605,4979970,5335337,5697848,6067644,6444874,6829686,7222233,7622670,8031155,8447851,8872923,9306539,9748871,10200093,10660385,11129928,11608910,12097519,12595949,13104398,13623066,14152160,14691888,15242465,15804109,16377041,16961490,17557686,18165865,18786269,19419143,20064738,20723309,21395118,22080430,22779516];
+const TGT=22500000, PROJ_YEARS=8.2;
+const pc=document.getElementById('proj'),px=pc.getContext('2d'),tt=document.getElementById('tt');
+let pts=[],animStart=0;
+function layoutProj(){
+  const r=window.devicePixelRatio||1,w=pc.clientWidth,h=pc.clientHeight;
+  pc.width=w*r;pc.height=h*r;px.setTransform(r,0,0,r,0,0);
+  const padL=8,padR=8,padT=16,padB=20,iw=w-padL-padR,ih=h-padT-padB;
+  const mx=TGT*1.02,mn=0;
+  pts=PROJ.map((v,i)=>({x:padL+iw*i/(PROJ.length-1),y:padT+ih*(1-(v-mn)/(mx-mn)),v,
+    yr:PROJ_YEARS*i/(PROJ.length-1)}));
+  pts._target_y=padT+ih*(1-(TGT-mn)/(mx-mn));
+}
+function drawProj(now){
+  if(!animStart)animStart=now;const e=1-Math.pow(1-Math.min((now-animStart)/1000,1),3);
+  const w=pc.clientWidth,h=pc.clientHeight;px.clearRect(0,0,w,h);
+  // grid
+  px.strokeStyle='rgba(28,41,66,.5)';px.lineWidth=1;
+  for(let i=0;i<=3;i++){const y=16+(h-36)*i/3;px.beginPath();px.moveTo(0,y);px.lineTo(w,y);px.stroke();}
+  const shown=Math.max(2,Math.floor(pts.length*e)),seg=pts.slice(0,shown);
+  // area
+  const grad=px.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,'rgba(245,196,81,.26)');grad.addColorStop(1,'rgba(245,196,81,0)');
+  px.beginPath();px.moveTo(seg[0].x,h-20);seg.forEach(p=>px.lineTo(p.x,p.y));
+  px.lineTo(seg[seg.length-1].x,h-20);px.closePath();px.fillStyle=grad;px.fill();
+  // line
+  px.beginPath();seg.forEach((p,i)=>i?px.lineTo(p.x,p.y):px.moveTo(p.x,p.y));
+  px.strokeStyle='#f5c451';px.lineWidth=2.4;px.shadowBlur=14;px.shadowColor='rgba(245,196,81,.5)';px.stroke();px.shadowBlur=0;
+  // target line
+  px.beginPath();px.setLineDash([5,6]);px.moveTo(0,pts._target_y);px.lineTo(w,pts._target_y);
+  px.strokeStyle='rgba(61,220,132,.45)';px.lineWidth=1;px.stroke();px.setLineDash([]);
+  px.fillStyle='rgba(61,220,132,.7)';px.font='600 10px "JetBrains Mono",monospace';px.textAlign='left';
+  px.fillText('FIRE ₹2.25 Cr',6,pts._target_y-6);
+  // end dot
+  const last=seg[seg.length-1];
+  px.beginPath();px.arc(last.x,last.y,4,0,2*PI);px.fillStyle='#fff';px.shadowBlur=12;px.shadowColor='#f5c451';px.fill();px.shadowBlur=0;
+  // x labels
+  px.fillStyle='rgba(125,141,176,.7)';px.font='10px Inter,sans-serif';px.textAlign='center';
+  [0,2,4,6,8].forEach(yr=>{const fx=8+(w-16)*yr/PROJ_YEARS;px.fillText('Y'+yr,fx,h-4);});
+  if(e<1)requestAnimationFrame(drawProj);
+}
+function restartProj(){layoutProj();animStart=0;requestAnimationFrame(drawProj);}
+pc.addEventListener('mousemove',ev=>{const rect=pc.getBoundingClientRect(),mx=ev.clientX-rect.left;
+  let near=pts[0];pts.forEach(p=>{if(Math.abs(p.x-mx)<Math.abs(near.x-mx))near=p;});
+  tt.style.left=near.x+'px';tt.style.top=near.y+'px';tt.style.opacity=1;
+  tt.innerHTML='Year '+near.yr.toFixed(1)+'<b>₹'+inr(near.v)+'</b>';});
+pc.addEventListener('mouseleave',()=>tt.style.opacity=0);
+window.addEventListener('resize',()=>{layoutProj();drawProj(performance.now());});
+
+/* ── allocation donut ────────────────────────────────────────── */
+const ALLOC=[
+  {nm:'Multi-Asset MF',pc:78.4,val:533739,c:'#34d8c4'},
+  {nm:'Gold',          pc:19.7,val:133834,c:'#f5c451'},
+  {nm:'Equity (LIC)',  pc:1.9, val:13257, c:'#5aa9ff'},
+];
+(function(){
+  const c=document.getElementById('donut'),x=c.getContext('2d'),cx=85,cy=85,R=66,SW=15;
+  const al=document.getElementById('alist');
+  ALLOC.forEach(a=>al.insertAdjacentHTML('beforeend',
+    `<div class="arow"><span class="dot" style="background:${a.c}"></span>
+     <span class="nm">${a.nm}</span><span class="pc">${a.pc}%</span>
+     <span class="am money">₹${inr(a.val)}</span></div>`));
+  let t0=0;
+  function draw(now){if(!t0)t0=now;const e=Math.min((now-t0)/1000,1),ease=1-Math.pow(1-e,3);
+    x.clearRect(0,0,170,170);
+    x.beginPath();x.arc(cx,cy,R,0,2*PI);x.strokeStyle='rgba(28,41,66,.6)';x.lineWidth=SW+3;x.stroke();
+    let a0=-PI/2;
+    ALLOC.forEach(seg=>{const sweep=2*PI*(seg.pc/100)*ease;
+      x.beginPath();x.arc(cx,cy,R,a0,a0+sweep-0.04);
+      x.strokeStyle=seg.c;x.lineWidth=SW;x.lineCap='round';x.stroke();
+      a0+=2*PI*(seg.pc/100);});
+    if(e<1)requestAnimationFrame(draw);}
+  requestAnimationFrame(draw);
+})();
+
+/* ── holdings ────────────────────────────────────────────────── */
+const HOLD=[
+  {nm:'ICICI Pru Multi-Asset',ex:'Mutual Fund · Direct Growth',c:'#34d8c4',price:'893.91',pricesuf:' NAV',qty:'597.084',val:533739,alloc:78.4,pnl:33739,pnlpc:6.75},
+  {nm:'Paytm Gold',ex:'Digital Gold · 5.5381 g',c:'#f5c451',price:'14,500',pricesuf:'/g',qty:'5.5381 g',val:80302,alloc:11.8,pnl:-2240,pnlpc:-2.71},
+  {nm:'Nippon Gold Bees ETF',ex:'NSE · Gold ETF',c:'#e0a93f',price:'118.96',pricesuf:'',qty:'450',val:53532,alloc:7.9,pnl:59,pnlpc:0.11},
+  {nm:'LIC',ex:'NSE · Equity',c:'#5aa9ff',price:'441.90',pricesuf:'',qty:'30',val:13257,alloc:1.9,pnl:-303,pnlpc:-2.23},
+];
+(function(){
+  const tb=document.getElementById('holdings');
+  HOLD.forEach(h=>{
+    const up=h.pnl>=0,cls=up?'up':'dn',sign=up?'+':'';
+    tb.insertAdjacentHTML('beforeend',`<tr>
+      <td><div class="sym"><div class="tk" style="background:${h.c}">${h.nm.slice(0,2).toUpperCase()}</div>
+        <div><div class="nm">${h.nm}</div><div class="ex">${h.ex}</div></div></div></td>
+      <td class="r"><span class="money">₹${h.price}</span><span style="color:var(--mut);font-size:11px">${h.pricesuf}</span></td>
+      <td class="r" style="color:var(--mut)">${h.qty}</td>
+      <td class="r money">₹${inr(h.val)}</td>
+      <td class="r" style="color:var(--mut)">${h.alloc}%</td>
+      <td class="r pnl ${cls}"><span class="money">${sign}₹${inr(Math.abs(h.pnl))}</span> <span style="color:var(--mut);font-weight:500;font-size:11px">(${sign}${h.pnlpc}%)</span></td>
+    </tr>`);
+  });
+})();
+
+/* ── funds & SIP ─────────────────────────────────────────────── */
+const FUNDS=[
+  {nm:'ICICI Pru Multi-Asset',sub:'Direct · Growth · Lump-sum',val:533739,ret:6.75,sip:'—'},
+  {nm:'Paytm Gold',sub:'Digital Gold · Monthly SIP',val:80302,ret:-2.71,sip:'₹10,001'},
+];
+(function(){
+  const tb=document.getElementById('funds');
+  FUNDS.forEach(f=>{const up=f.ret>=0;
+    tb.insertAdjacentHTML('beforeend',`<tr>
+      <td><div class="nm" style="font-weight:600">${f.nm}</div><div class="ex" style="font-size:11px;color:var(--mut)">${f.sub}</div></td>
+      <td class="r money">₹${inr(f.val)}</td>
+      <td class="r"><span class="tag ${up?'up':'dn'}">${up?'+':''}${f.ret}%</span></td>
+      <td class="r money" style="color:var(--mut)">${f.sip}</td></tr>`);});
+})();
+
+/* ── FIRE ring ───────────────────────────────────────────────── */
+(function(){
+  const c=document.getElementById('firering'),x=c.getContext('2d'),cx=80,cy=80,R=64,SW=12;
+  const TARGETPCT=3.0,pctEl=document.getElementById('firepct');
+  let t0=0;
+  function draw(now){if(!t0)t0=now;const e=Math.min((now-t0)/1200,1),ease=1-Math.pow(1-e,3);
+    const cur=TARGETPCT*ease;x.clearRect(0,0,160,160);
+    x.beginPath();x.arc(cx,cy,R,0,2*PI);x.strokeStyle='rgba(28,41,66,.7)';x.lineWidth=SW;x.stroke();
+    const a1=-PI/2+2*PI*Math.max(cur,0.4)/100;
+    const g=x.createLinearGradient(0,0,160,160);g.addColorStop(0,'#c9962f');g.addColorStop(1,'#ffd97a');
+    x.beginPath();x.arc(cx,cy,R,-PI/2,a1);x.strokeStyle=g;x.lineWidth=SW;x.lineCap='round';
+    x.shadowBlur=16;x.shadowColor='rgba(245,196,81,.45)';x.stroke();x.shadowBlur=0;
+    pctEl.textContent=cur.toFixed(1)+'%';
+    if(e<1)requestAnimationFrame(draw);}
+  requestAnimationFrame(draw);
+})();
+
+restartProj();
+</script>
+</body>
+</html>
