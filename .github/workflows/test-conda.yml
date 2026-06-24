@@ -38,9 +38,12 @@ jobs:
           # real broker API and are excluded from CI (run locally: pytest -m live).
           pytest -m "not live"
 
-  # Real-time alert: WhatsApp on any CI failure. Requires repo secrets
-  # TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM, TWILIO_WHATSAPP_TO.
-  # No-ops cleanly if the secrets are not set.
+  # Real-time alert: WhatsApp on any CI failure.
+  # Authenticates with a SCOPED Twilio API Key (not the primary account token),
+  # so a leak from GitHub is revocable without touching the account auth token.
+  # Requires repo secrets: TWILIO_ACCOUNT_SID (identifier, for the URL),
+  # TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET, TWILIO_WHATSAPP_FROM, TWILIO_WHATSAPP_TO.
+  # No-ops cleanly if any secret is unset.
   notify:
     name: Notify on failure
     needs: test
@@ -49,19 +52,20 @@ jobs:
     steps:
       - name: WhatsApp alert via Twilio
         env:
-          SID:   ${{ secrets.TWILIO_ACCOUNT_SID }}
-          TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
-          FROM:  ${{ secrets.TWILIO_WHATSAPP_FROM }}
-          TO:    ${{ secrets.TWILIO_WHATSAPP_TO }}
+          ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          KEY_SID:     ${{ secrets.TWILIO_API_KEY_SID }}
+          KEY_SECRET:  ${{ secrets.TWILIO_API_KEY_SECRET }}
+          FROM:        ${{ secrets.TWILIO_WHATSAPP_FROM }}
+          TO:          ${{ secrets.TWILIO_WHATSAPP_TO }}
         run: |
-          if [ -z "$SID" ] || [ -z "$TOKEN" ] || [ -z "$FROM" ] || [ -z "$TO" ]; then
-            echo "Twilio secrets not configured — skipping WhatsApp alert."
+          if [ -z "$ACCOUNT_SID" ] || [ -z "$KEY_SID" ] || [ -z "$KEY_SECRET" ] || [ -z "$FROM" ] || [ -z "$TO" ]; then
+            echo "Twilio API-key secrets not configured — skipping WhatsApp alert."
             exit 0
           fi
           RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           BODY="CI FAILED on ${GITHUB_REF_NAME} (${GITHUB_REPOSITORY}). ${RUN_URL}"
-          curl -sS -X POST "https://api.twilio.com/2010-04-01/Accounts/${SID}/Messages.json" \
+          curl -sS -X POST "https://api.twilio.com/2010-04-01/Accounts/${ACCOUNT_SID}/Messages.json" \
             --data-urlencode "From=${FROM}" \
             --data-urlencode "To=${TO}" \
             --data-urlencode "Body=${BODY}" \
-            -u "${SID}:${TOKEN}" -o /dev/null -w "Twilio HTTP %{http_code}\n"
+            -u "${KEY_SID}:${KEY_SECRET}" -o /dev/null -w "Twilio HTTP %{http_code}\n"
