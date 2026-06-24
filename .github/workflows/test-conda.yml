@@ -64,8 +64,14 @@ jobs:
           fi
           RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           BODY="CI FAILED on ${GITHUB_REF_NAME} (${GITHUB_REPOSITORY}). ${RUN_URL}"
-          curl -sS -X POST "https://api.twilio.com/2010-04-01/Accounts/${ACCOUNT_SID}/Messages.json" \
+          HTTP=$(curl -sS -X POST "https://api.twilio.com/2010-04-01/Accounts/${ACCOUNT_SID}/Messages.json" \
             --data-urlencode "From=${FROM}" \
             --data-urlencode "To=${TO}" \
             --data-urlencode "Body=${BODY}" \
-            -u "${KEY_SID}:${KEY_SECRET}" -o /dev/null -w "Twilio HTTP %{http_code}\n"
+            -u "${KEY_SID}:${KEY_SECRET}" -o resp.json -w "%{http_code}")
+          echo "Twilio HTTP ${HTTP}"; cat resp.json; echo
+          # Fail loudly if the alert didn't send — a silent alert is worse than none.
+          if [ "${HTTP}" -lt 200 ] || [ "${HTTP}" -ge 300 ]; then
+            echo "::error::CI-failure WhatsApp alert did not send (HTTP ${HTTP}). Check Twilio secrets."
+            exit 1
+          fi
