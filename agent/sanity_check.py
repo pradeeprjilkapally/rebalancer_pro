@@ -10,6 +10,7 @@ via WhatsApp directly without invoking Claude.
 """
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -30,6 +31,8 @@ _TASK      = os.path.join(_REPO, 'task.md')
 _AI        = os.path.join(_REPO, 'action_items.md')
 _TURL      = os.path.join(_REPO, '.tunnel_url')
 _CLAUDE    = '/Users/pradeepreddyjilkapally/.local/bin/claude'
+_GH        = shutil.which('gh') or '/opt/anaconda3/bin/gh'
+_GH_REPO   = os.getenv('GH_REPO', 'pradeeprjilkapally/rebalancer_pro')
 
 _RELAY     = os.getenv('WORKERS_RELAY_URL', '').rstrip('/')
 _TIMEOUT   = 8
@@ -51,6 +54,7 @@ _AUTO_FIXABLE = {
 _HUMAN_REQUIRED = {
     'Auth sentinels',
     'Tokens freshness',
+    'CI (GitHub)',
 }
 
 
@@ -153,6 +157,35 @@ def check_task_md() -> tuple[bool, str]:
         return False, f'Could not read task.md: {e}'
 
 
+def check_ci() -> tuple[bool, str]:
+    """
+    Daily backstop for the real-time GitHub Action alert: flag master if its
+    most recent completed CI run failed. Fails open (no alarm) if gh is
+    unavailable or a run is still in progress — never block on tooling.
+    """
+    try:
+        result = subprocess.run(
+            [_GH, 'run', 'list', '--repo', _GH_REPO, '--branch', 'master',
+             '--limit', '1', '--json', 'status,conclusion,displayTitle,url'],
+            capture_output=True, text=True, timeout=_TIMEOUT,
+        )
+        if result.returncode != 0:
+            return True, ''                       # gh missing/unauthed — don't false-alarm
+        import json as _json
+        runs = _json.loads(result.stdout or '[]')
+        if not runs:
+            return True, ''
+        run = runs[0]
+        if run.get('status') != 'completed':
+            return True, ''                       # still running — judge it next time
+        if run.get('conclusion') == 'failure':
+            title = (run.get('displayTitle') or '')[:45]
+            return False, f"master CI red: {title} — {run.get('url', '')}"
+        return True, ''
+    except Exception:
+        return True, ''                           # fail open
+
+
 CHECKS = [
     ('Cloudflared process', check_cloudflared),
     ('Tunnel (direct)',     check_tunnel_direct),
@@ -161,6 +194,7 @@ CHECKS = [
     ('Twilio API',         check_twilio),
     ('Auth sentinels',     check_auth_sentinels),
     ('Tokens freshness',   check_tokens),
+    ('CI (GitHub)',        check_ci),
     ('Open tasks',         check_task_md),
 ]
 

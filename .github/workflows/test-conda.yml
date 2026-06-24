@@ -37,3 +37,31 @@ jobs:
           # Whole deterministic suite (SDK + agent). `live`-marked tests hit the
           # real broker API and are excluded from CI (run locally: pytest -m live).
           pytest -m "not live"
+
+  # Real-time alert: WhatsApp on any CI failure. Requires repo secrets
+  # TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM, TWILIO_WHATSAPP_TO.
+  # No-ops cleanly if the secrets are not set.
+  notify:
+    name: Notify on failure
+    needs: test
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: WhatsApp alert via Twilio
+        env:
+          SID:   ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          FROM:  ${{ secrets.TWILIO_WHATSAPP_FROM }}
+          TO:    ${{ secrets.TWILIO_WHATSAPP_TO }}
+        run: |
+          if [ -z "$SID" ] || [ -z "$TOKEN" ] || [ -z "$FROM" ] || [ -z "$TO" ]; then
+            echo "Twilio secrets not configured — skipping WhatsApp alert."
+            exit 0
+          fi
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          BODY="CI FAILED on ${GITHUB_REF_NAME} (${GITHUB_REPOSITORY}). ${RUN_URL}"
+          curl -sS -X POST "https://api.twilio.com/2010-04-01/Accounts/${SID}/Messages.json" \
+            --data-urlencode "From=${FROM}" \
+            --data-urlencode "To=${TO}" \
+            --data-urlencode "Body=${BODY}" \
+            -u "${SID}:${TOKEN}" -o /dev/null -w "Twilio HTTP %{http_code}\n"
