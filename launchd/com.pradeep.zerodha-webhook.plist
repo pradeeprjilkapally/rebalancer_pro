@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.pradeep.zerodha-webhook</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/anaconda3/bin/python3</string>
+        <string>-m</string>
+        <string>agent.webhook</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/pradeepreddyjilkapally/Documents/Pradeep/claude_repo/pyPMClient</string>
+
+    <!-- Restart automatically if it crashes -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Start immediately when loaded -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!--
+      Logs MUST live outside ~/Documents — launchd opens these paths before exec
+      and macOS TCC denies it write access to ~/Documents, failing the spawn with
+      EX_CONFIG (78). See the tunnel plist for the full explanation.
+    -->
+    <key>StandardOutPath</key>
+    <string>/Users/pradeepreddyjilkapally/Library/Logs/rebalancer/webhook.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/pradeepreddyjilkapally/Library/Logs/rebalancer/webhook_error.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/anaconda3/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>HOME</key>
+        <string>/Users/pradeepreddyjilkapally</string>
+    </dict>
+</dict>
+</plist>

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.pradeep.zerodha-tunnel</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/anaconda3/bin/python3</string>
+        <string>-m</string>
+        <string>agent.tunnel_manager</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/pradeepreddyjilkapally/Documents/Pradeep/claude_repo/pyPMClient</string>
+
+    <!-- Restart automatically if the tunnel drops -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!--
+      Logs MUST live outside ~/Documents. launchd opens StandardOutPath /
+      StandardErrorPath itself, before exec, and macOS TCC denies launchd write
+      access to ~/Documents (and ~/Desktop, ~/Downloads). When the open fails the
+      whole spawn fails with EX_CONFIG (78) — no exec, no output — and KeepAlive
+      respawns ~1/sec forever. ~/Library/Logs is not TCC-protected.
+    -->
+    <key>StandardOutPath</key>
+    <string>/Users/pradeepreddyjilkapally/Library/Logs/rebalancer/tunnel.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/pradeepreddyjilkapally/Library/Logs/rebalancer/tunnel_error.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/anaconda3/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>HOME</key>
+        <string>/Users/pradeepreddyjilkapally</string>
+    </dict>
+</dict>
+</plist>
