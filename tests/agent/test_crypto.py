@@ -1,4 +1,6 @@
 """Encryption-at-rest round-trips for agent.crypto."""
+import os
+
 import pytest
 
 from agent import crypto
@@ -27,7 +29,8 @@ def test_file_roundtrip_is_encrypted_and_0600(tmp_path):
 
     raw = target.read_bytes()
     assert b'GOLDBEES' not in raw                  # plaintext not on disk
-    assert (target.stat().st_mode & 0o777) == 0o600  # restrictive perms
+    if os.name != 'nt':                            # POSIX file modes only; Windows has no 0o600
+        assert (target.stat().st_mode & 0o777) == 0o600
     assert crypto.read_encrypted(str(target)) == obj
 
 
