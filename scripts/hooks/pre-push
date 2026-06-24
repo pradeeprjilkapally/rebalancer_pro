@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+#
+# Pre-push gate: run the deterministic test suite before every push.
+# A failure blocks the push so red code never reaches the remote (and CI).
+#
+# Install:  cp scripts/hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+# Override (rare):  git push --no-verify
+#
+set -euo pipefail
+
+repo="$(git rev-parse --show-toplevel)"
+echo "[pre-push] running deterministic tests (pytest -m 'not live')..."
+
+cd "$repo/tests"
+if ! python3 -m pytest -m "not live" -q --no-header -p no:cacheprovider; then
+    echo ""
+    echo "[pre-push] ❌ tests failed — push aborted."
+    echo "[pre-push]    Fix them, or override with: git push --no-verify"
+    exit 1
+fi
+
+echo "[pre-push] ✅ deterministic tests passed — pushing."

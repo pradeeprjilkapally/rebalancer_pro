@@ -34,4 +34,6 @@ jobs:
         shell: bash -l {0}
         run: |
           cd tests
-          pytest test_pmClient.py 
+          # Whole deterministic suite (SDK + agent). `live`-marked tests hit the
+          # real broker API and are excluded from CI (run locally: pytest -m live).
+          pytest -m "not live"

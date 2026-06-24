@@ -25,3 +25,5 @@ testplans/
 
 # Personal financial data — keep off version control
 mydata/
+# Python bytecode (any dir)
+__pycache__/

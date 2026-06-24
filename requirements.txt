@@ -9,3 +9,4 @@ twilio~=9.0.0
 kiteconnect~=5.2.0
 flask~=3.0.0
 cryptography>=45.0.7,<47
+requests~=2.32

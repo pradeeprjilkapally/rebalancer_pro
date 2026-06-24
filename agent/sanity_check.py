@@ -127,13 +127,17 @@ def check_auth_sentinels() -> tuple[bool, str]:
 
 def check_tokens() -> tuple[bool, str]:
     issues = []
-    tokens_path = os.path.join(_REPO, 'agent', '.tokens.json')
+    # Tokens are encrypted at rest (.tokens.json.enc); fall back to the legacy
+    # plaintext path only if the encrypted file is absent.
+    enc_path    = os.path.join(_REPO, 'agent', '.tokens.json.enc')
+    legacy_path = os.path.join(_REPO, 'agent', '.tokens.json')
+    tokens_path = enc_path if os.path.isfile(enc_path) else legacy_path
     if not os.path.isfile(tokens_path):
-        issues.append('Paytm tokens file missing')
+        issues.append('Paytm tokens missing — re-authenticate from the app')
     else:
         age_h = (time.time() - os.path.getmtime(tokens_path)) / 3600
         if age_h > 26:
-            issues.append(f'Paytm tokens are {age_h:.0f}h old (may be stale)')
+            issues.append(f'Paytm tokens {age_h:.0f}h old (may be stale) — re-authenticate')
     return (not issues), '; '.join(issues)
 
 
@@ -291,24 +295,21 @@ def main():
             detail.replace('|', '/'),
         )
 
-    # Compose WhatsApp notification
-    lines = [f'Morning sanity check — {_NOW_LABEL}']
+    # Compose WhatsApp notification — short and glanceable.
+    hhmm = datetime.now().strftime('%H:%M')
+    n    = len(failures)
+    lines = [f'⚠️ Sanity check {hhmm} IST — {n} issue{"s" if n != 1 else ""}']
 
     if fixable:
+        names = ', '.join(label for label, _ in fixable)
         if pr_url:
-            lines.append(f'\nAuto-fixed and PR raised:')
-            for label, detail in fixable:
-                lines.append(f'  - {label}: {detail}')
-            lines.append(f'\nPR: {pr_url}')
+            lines += [f'Auto-fixed: {names}', f'Review PR → {pr_url}']
         else:
-            lines.append(f'\nAuto-fix attempted but PR could not be confirmed. Check logs/sanity_autofix.log')
-            for label, detail in fixable:
-                lines.append(f'  - {label}: {detail}')
+            lines.append(f'Auto-fix tried: {names} (no PR — see logs/sanity_autofix.log)')
 
     if human_needed:
-        lines.append(f'\nNeeds your attention:')
-        for label, detail in human_needed:
-            lines.append(f'  - {label}: {detail}')
+        lines.append('Needs you:')
+        lines += [f'• {detail}' for _, detail in human_needed]
 
     send_whatsapp('\n'.join(lines))
     print('  WhatsApp notification sent.')
