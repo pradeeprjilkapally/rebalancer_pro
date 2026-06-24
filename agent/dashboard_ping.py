@@ -1,10 +1,10 @@
 """
-Dashboard ping — sends a compact WhatsApp snapshot 3× daily.
+Dashboard ping — sends a compact Slack snapshot 3× daily.
 Scheduled at 7:50 AM, 12:00 PM, 3:00 PM IST via launchd.
 
 Reads the last daily-review JSON (paytm_data.json / zerodha_data.json) for
 broker totals, fetches live MF NAV and gold price for manual holdings, and
-sends a single link-first message to WhatsApp.
+sends a single link-first message to Slack.
 
 Separate from the morning review notification (which includes suggestions).
 """
@@ -143,9 +143,9 @@ def main():
     print(msg)
 
     try:
-        from agent.whatsapp import send_whatsapp
+        from agent.notify import notify
         import threading
-        t = threading.Thread(target=send_whatsapp, args=(msg,), daemon=True)
+        t = threading.Thread(target=notify, args=(msg,), daemon=True)
         t.start()
         t.join(timeout=15)
     except Exception as e:

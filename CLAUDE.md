@@ -2,7 +2,7 @@
 
 ## What this is
 A portfolio rebalancer and daily review agent for Paytm Money and Zerodha Kite.
-Runs on a Mac (launchd), sends a WhatsApp summary daily, and supports interactive
+Runs on a Mac (launchd), sends a Slack summary daily, and supports interactive
 rebalancing via CLI.
 
 Push target: **always `git push rebalancer master`** — never push to `origin` (upstream paytmmoney/pyPMClient).
@@ -17,7 +17,7 @@ Push target: **always `git push rebalancer master`** — never push to `origin` 
 | `python -m agent.main --logout` | Clear saved Paytm Money tokens |
 | `python -m agent.daily_review --broker paytm` | Daily review for Paytm Money (scheduled 7:45 AM IST = 02:15 UTC) |
 | `python -m agent.daily_review --broker zerodha` | Daily review for Zerodha (scheduled 8:00 AM IST = 02:30 UTC) |
-| `python -m agent.webhook` | Start Flask webhook server on `WEBHOOK_PORT` (default 5001) — receives WhatsApp replies |
+| `python -m agent.webhook` | Start Flask webhook server on `WEBHOOK_PORT` (default 5001) — OAuth callbacks + dashboards |
 | `pip install -e .` | Install pmClient as local editable package (required on fresh clone) |
 
 ---
@@ -27,14 +27,14 @@ Push target: **always `git push rebalancer master`** — never push to `origin` 
 | File | Role |
 |---|---|
 | `agent/main.py` | Interactive CLI entry point — full rebalancer flow |
-| `agent/daily_review.py` | Scheduled review entry point — runs analyse + FIRE + WhatsApp send |
+| `agent/daily_review.py` | Scheduled review entry point — runs analyse + FIRE + Slack send |
 | `agent/rebalancer.py` | Core rebalancing logic — `analyse()`, `print_portfolio()`, `confirm_and_execute()` |
 | `agent/portfolio.py` | Builds a unified portfolio snapshot dict from broker data |
 | `agent/fire_analyser.py` | FIRE progress analysis — `analyse_fire()`, `fire_aligned_suggestions()` |
 | `agent/auth.py` | Paytm Money session management — token cache in `agent/.tokens.json` |
 | `agent/brokers/zerodha.py` | Zerodha Kite integration — auth, equity/MF/SIP fetch; tokens reset 3:30 AM daily |
-| `agent/whatsapp.py` | Twilio WhatsApp send — `send_whatsapp()` is fire-and-forget; falls back to console |
-| `agent/webhook.py` | Flask server receiving Twilio WhatsApp replies; validates via `TWILIO_AUTH_TOKEN` |
+| `agent/notify.py` | Slack notifications — `notify()` posts to `SLACK_WEBHOOK_URL`, confirms delivery (HTTP 200 `ok`), falls back to console |
+| `agent/webhook.py` | Flask server — OAuth callbacks (`/callback`, `/paytm_callback`), dashboards (Basic Auth), `/health` |
 | `agent/tunnel_manager.py` | Cloudflare tunnel — exposes webhook over public URL |
 | `agent/crypto.py` | Fernet encryption for stored tokens (`WEBHOOK_ENCRYPTION_KEY`) |
 | `pmClient/` | Paytm Money API SDK (upstream: `paytmmoney/pyPMClient`) — do not modify |
@@ -53,10 +53,7 @@ All loaded from `.env` via `python-dotenv`. Copy `.env.example` to `.env` on a f
 | `PAYTM_API_SECRET` | `main.py`, `daily_review.py` | Paytm Money API secret |
 | `ZERODHA_API_KEY` | `brokers/zerodha.py` | Zerodha Kite API key |
 | `ZERODHA_API_SECRET` | `brokers/zerodha.py` | Zerodha Kite API secret |
-| `TWILIO_ACCOUNT_SID` | `whatsapp.py` | Twilio account SID |
-| `TWILIO_AUTH_TOKEN` | `whatsapp.py`, `webhook.py` | Twilio auth token (also used to validate inbound webhook) |
-| `TWILIO_WHATSAPP_FROM` | `whatsapp.py` | Sender number e.g. `whatsapp:+14155238886` |
-| `TWILIO_WHATSAPP_TO` | `whatsapp.py` | Your number e.g. `whatsapp:+91XXXXXXXXXX` |
+| `SLACK_WEBHOOK_URL` | `notify.py` | Slack incoming webhook for all proactive notifications |
 | `WEBHOOK_PORT` | `webhook.py` | Flask port (default `5001`) |
 | `WEBHOOK_ENCRYPTION_KEY` | `crypto.py` | Fernet key for token encryption |
 | `CLOUDFLARE_API_TOKEN` | `tunnel_manager.py` | Cloudflare API token for tunnel |
@@ -70,8 +67,8 @@ All loaded from `.env` via `python-dotenv`. Copy `.env.example` to `.env` on a f
 
 | Job | Schedule (IST) | Schedule (UTC) | Entry point | Notes |
 |---|---|---|---|---|
-| Paytm Money daily review | 7:45 AM IST | 02:15 UTC | `python -m agent.daily_review --broker paytm` | Writes `mydata/paytm_suggestions.txt` + WhatsApp |
-| Zerodha daily review | 8:00 AM IST | 02:30 UTC | `python -m agent.daily_review --broker zerodha` | Zerodha tokens reset ~3:30 AM; headless auth via WhatsApp |
+| Paytm Money daily review | 7:45 AM IST | 02:15 UTC | `python -m agent.daily_review --broker paytm` | Writes `mydata/paytm_suggestions.txt` + Slack |
+| Zerodha daily review | 8:00 AM IST | 02:30 UTC | `python -m agent.daily_review --broker zerodha` | Zerodha tokens reset ~3:30 AM; headless auth link posted to Slack |
 
 Scheduled via macOS **launchd** (`~/Library/LaunchAgents/`). Wrap each command in `try/except`; prefix logs with `[cron]`.
 
@@ -83,7 +80,7 @@ Scheduled via macOS **launchd** (`~/Library/LaunchAgents/`). Wrap each command i
 |---|---|---|
 | Paytm Money API | Portfolio data, order placement | pmClient SDK (this repo) |
 | Zerodha Kite Connect | Equity/MF holdings, SIPs | `kiteconnect` PyPI package |
-| Twilio WhatsApp | Daily summary delivery + reply-to-trade flow | `twilio` PyPI package |
+| Slack | Daily summary + alert delivery (incoming webhook) | `SLACK_WEBHOOK_URL` |
 | Cloudflare Tunnel | Expose local webhook over public HTTPS | `tunnel_manager.py` |
 
 ---
@@ -112,8 +109,8 @@ Every task delivery ends with: **verified / not-verified / known-issues** stated
 **Push** — never push automatically. Always add a push item to `action_items.md` and remind Pradeep to run `git push rebalancer master`.
 
 **Code conventions**
-- **Notifications** — `send_whatsapp()` must never block the main flow. In scheduled jobs, wrap in `threading.Thread(target=send_whatsapp, args=(msg,), daemon=True).start()` if needed.
-- **Input validation** — at webhook/CLI boundaries: validate → normalize → act. Never trust raw Twilio webhook bodies without signature check (`TWILIO_AUTH_TOKEN`).
+- **Notifications** — `notify()` (Slack) must never block the main flow. In scheduled jobs, wrap in `threading.Thread(target=notify, args=(msg,), daemon=True).start()` if needed. It confirms delivery (HTTP 200 `ok`) — never assume a send succeeded without that.
+- **Input validation** — at webhook/CLI boundaries: validate → normalize → act. OAuth callback tokens are format-checked before use.
 - **Scheduled jobs** — all jobs wrapped in `try/except Exception as e: print(f"[cron] {e}")`. IST→UTC conversion documented as a comment on every schedule expression.
 - **Secrets** — never log or print env var values. `.env` is gitignored.
 - **pmClient** — treat as read-only upstream. All agent logic lives in `agent/`.

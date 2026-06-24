@@ -3,10 +3,10 @@
 
 On failures:
   - invokes `claude -p` to diagnose + fix + test + open a PR autonomously
-  - sends a WhatsApp notification with the PR link (or failure summary if unfixable)
+  - sends a Slack notification with the PR link (or failure summary if unfixable)
 
 Issues that require human action (auth sentinels, stale tokens) are flagged
-via WhatsApp directly without invoking Claude.
+via Slack directly without invoking Claude.
 """
 import os
 import re
@@ -24,7 +24,7 @@ load_dotenv()
 
 from agent.auth import PENDING_FILE as _PAYTM_PENDING
 from agent.brokers.zerodha import PENDING_FILE as _ZERODHA_PENDING
-from agent.whatsapp import send_whatsapp
+from agent.notify import notify
 
 _REPO      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _TASK      = os.path.join(_REPO, 'task.md')
@@ -46,7 +46,6 @@ _AUTO_FIXABLE = {
     'Tunnel (direct)',
     'Relay (Workers)',
     'Webhook (:5001)',
-    'Twilio API',
     'Open tasks',
 }
 
@@ -55,6 +54,7 @@ _HUMAN_REQUIRED = {
     'Auth sentinels',
     'Tokens freshness',
     'CI (GitHub)',
+    'Slack webhook',
 }
 
 
@@ -100,20 +100,13 @@ def check_webhook() -> tuple[bool, str]:
         return False, f'webhook on :{port} not responding: {e}'
 
 
-def check_twilio() -> tuple[bool, str]:
-    sid   = os.getenv('TWILIO_ACCOUNT_SID', '')
-    token = os.getenv('TWILIO_AUTH_TOKEN', '')
-    if not sid or not token:
-        return False, 'TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN not set'
-    try:
-        r = requests.get(
-            f'https://api.twilio.com/2010-04-01/Accounts/{sid}.json',
-            auth=(sid, token), timeout=_TIMEOUT,
-        )
-        ok = r.status_code == 200
-        return ok, '' if ok else f'Twilio API returned {r.status_code}'
-    except Exception as e:
-        return False, f'Twilio API unreachable: {e}'
+def check_slack() -> tuple[bool, str]:
+    url = os.getenv('SLACK_WEBHOOK_URL', '').strip()
+    if not url:
+        return False, 'SLACK_WEBHOOK_URL not set — alerts cannot deliver'
+    if not url.startswith('https://hooks.slack.com/'):
+        return False, 'SLACK_WEBHOOK_URL malformed'
+    return True, ''
 
 
 def check_auth_sentinels() -> tuple[bool, str]:
@@ -191,7 +184,7 @@ CHECKS = [
     ('Tunnel (direct)',     check_tunnel_direct),
     ('Relay (Workers)',     check_relay),
     ('Webhook (:5001)',     check_webhook),
-    ('Twilio API',         check_twilio),
+    ('Slack webhook',      check_slack),
     ('Auth sentinels',     check_auth_sentinels),
     ('Tokens freshness',   check_tokens),
     ('CI (GitHub)',        check_ci),
@@ -329,7 +322,7 @@ def main():
             detail.replace('|', '/'),
         )
 
-    # Compose WhatsApp notification — short and glanceable.
+    # Compose Slack notification — short and glanceable.
     hhmm = datetime.now().strftime('%H:%M')
     n    = len(failures)
     lines = [f'⚠️ Sanity check {hhmm} IST — {n} issue{"s" if n != 1 else ""}']
@@ -345,8 +338,8 @@ def main():
         lines.append('Needs you:')
         lines += [f'• {detail}' for _, detail in human_needed]
 
-    send_whatsapp('\n'.join(lines))
-    print('  WhatsApp notification sent.')
+    notify('\n'.join(lines))
+    print('  Slack notification sent.')
 
 
 if __name__ == '__main__':

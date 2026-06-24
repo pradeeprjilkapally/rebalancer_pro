@@ -5,23 +5,8 @@ Routes
 ------
 GET  /callback         Zerodha OAuth redirect
 GET  /paytm_callback   Paytm Money OAuth redirect
-POST /whatsapp         Twilio inbound WhatsApp — state machine handler
+GET  /dashboard_main   Portfolio dashboard (Basic Auth)
 GET  /health           Liveness probe
-
-WhatsApp conversation states
------------------------------
-idle           → default; no active loop
-auth_pending   → auth ping sent; waiting for [Authenticate] / [Skip Today]
-post_skip      → user skipped; waiting for [Add Input] / [Done]
-awaiting_input → user tapped Add Input; waiting for free text
-
-Button payloads (from Twilio quick-reply templates)
-----------------------------------------------------
-btn_authenticate → send login links, reset to idle
-btn_skip         → send post_skip prompt, set state = post_skip
-btn_add_input    → ask for input, set state = awaiting_input
-btn_done         → close loop, reset to idle
-btn_continue     → re-prompt Continue/Done, stay in awaiting_input
 
 Permanent public URL (never changes):
   https://portfolio-relay.pradeeprjilkapally.workers.dev
@@ -35,8 +20,6 @@ import sys
 
 from dotenv import load_dotenv
 from flask import Flask, Response, render_template_string, request
-from twilio.request_validator import RequestValidator
-from twilio.twiml.messaging_response import MessagingResponse
 
 load_dotenv()
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -45,25 +28,21 @@ from agent.crypto import encrypt_token, read_encrypted
 from agent.gold_price import build_svg_chart, load_history as load_gold_history
 from agent.manual_holdings import _fetch_navs_amfi, _fetch_nav_mfapi
 from agent.auth import (
-    PENDING_FILE as _PAYTM_PENDING,
     _save_tokens as _save_paytm_tokens,
     clear_pending as _clear_paytm_pending,
 )
 from agent.brokers.zerodha import (
-    PENDING_FILE as _ZERODHA_PENDING,
     clear_pending as _clear_zerodha_pending,
 )
-from agent import conversation as conv
-from agent.whatsapp import send_auth_links, send_post_skip_prompt
 
 app = Flask(__name__)
 
 
 # ---------------------------------------------------------------------------
 # Access control — HTTP Basic Auth for the human-facing (read-only) views.
-# Machine endpoints (/callback, /paytm_callback, /whatsapp, /health) stay open:
-# they are reached by Zerodha/Paytm/Twilio/the tunnel watchdog and are already
-# protected by token-format validation or Twilio signature checks.
+# Machine endpoints (/callback, /paytm_callback, /health) stay open:
+# they are reached by Zerodha/Paytm OAuth redirects and the tunnel watchdog,
+# and are protected by token-format validation.
 # ---------------------------------------------------------------------------
 _DASH_USER = os.getenv('DASHBOARD_USER', '')
 _DASH_PASS = os.getenv('DASHBOARD_PASS', '')
@@ -144,58 +123,15 @@ def _inr(value, decimals=0):
 _ENC_TOKEN_FILE = os.path.join(os.path.dirname(__file__), 'brokers', '.zerodha_request_token.enc')
 _TOKEN_RE       = re.compile(r'\b([A-Za-z0-9]{32})\b')
 
-# Button IDs from Twilio quick-reply templates
-_BTN_AUTHENTICATE = {'btn_authenticate', 'authenticate'}
-_BTN_SKIP         = {'btn_skip', 'skip today', 'skip'}
-_BTN_ADD_INPUT    = {'btn_add_input', 'add input'}
-_BTN_DONE         = {'btn_done', 'done'}
-_BTN_CONTINUE     = {'btn_continue', 'continue'}
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-def _read_pending(path: str) -> str | None:
-    try:
-        url = open(path).read().strip()
-        return url or None
-    except FileNotFoundError:
-        return None
-
-
-def _pending_brokers() -> list[str]:
-    out = []
-    if _read_pending(_PAYTM_PENDING):
-        out.append('Paytm Money')
-    if _read_pending(_ZERODHA_PENDING):
-        out.append('Zerodha')
-    return out
-
 
 def _save_enc_token(raw_token: str):
     encrypted = encrypt_token(raw_token)
     os.makedirs(os.path.dirname(_ENC_TOKEN_FILE), exist_ok=True)
     with open(_ENC_TOKEN_FILE, 'wb') as fh:
         fh.write(encrypted)
-
-
-def _validate_twilio(req) -> bool:
-    # Twilio signs against the permanent relay URL, not the tunnel/local URL Flask sees.
-    relay_base = os.getenv('WORKERS_RELAY_URL', '').rstrip('/')
-    url = f"{relay_base}/whatsapp" if relay_base else req.url
-    validator = RequestValidator(os.getenv('TWILIO_AUTH_TOKEN', ''))
-    return validator.validate(url, req.form, req.headers.get('X-Twilio-Signature', ''))
-
-
-def _twiml(msg: str):
-    r = MessagingResponse()
-    r.message(msg)
-    return str(r), 200, {'Content-Type': 'text/xml'}
-
-
-def _empty_twiml():
-    return str(MessagingResponse()), 200, {'Content-Type': 'text/xml'}
 
 
 # ---------------------------------------------------------------------------
@@ -220,7 +156,7 @@ _ERROR_HTML = """<!DOCTYPE html><html><head><meta charset="utf-8"><title>Auth Er
 .sub{font-size:14px;color:#666;margin-top:8px}</style></head>
 <body><div class="box"><div class="err">&#10007;</div>
 <div class="msg">{{ error }}</div>
-<div class="sub">Please try logging in again from the WhatsApp link.</div>
+<div class="sub">Please try logging in again from the Slack link.</div>
 </div></body></html>"""
 
 
@@ -280,112 +216,6 @@ def paytm_callback():
     except Exception as e:
         print(f'  [webhook] Paytm token exchange failed: {e}')
         return render_template_string(_ERROR_HTML, error='Token exchange failed — please retry.'), 500
-
-
-# ---------------------------------------------------------------------------
-# Route 3: Twilio WhatsApp inbound — state machine
-# ---------------------------------------------------------------------------
-
-@app.route('/whatsapp', methods=['POST'])
-def whatsapp_inbound():
-    if not _validate_twilio(request):
-        return Response('Forbidden', status=403)
-
-    # Prefer ButtonPayload (quick-reply tap) over raw Body text
-    raw_payload = request.form.get('ButtonPayload', '').strip()
-    raw_body    = request.form.get('Body', '').strip()
-    intent      = (raw_payload or raw_body).lower().strip()
-    state       = conv.get()
-    mode        = state.get('mode', 'idle')
-
-    # ---- [Authenticate] / YES -------------------------------------------------
-    if intent in _BTN_AUTHENTICATE or intent in ('yes', 'y'):
-        paytm_url   = _read_pending(_PAYTM_PENDING)
-        zerodha_url = _read_pending(_ZERODHA_PENDING)
-        if not paytm_url and not zerodha_url:
-            conv.reset()
-            return _twiml(
-                "No pending authentication — your sessions are active. "
-                "Next review at the scheduled time."
-            )
-        send_auth_links(paytm_url, zerodha_url)
-        conv.set_mode('auth_pending')
-        return _twiml(
-            "Login link(s) sent above. Tap to log in — you'll be redirected automatically. "
-            "No token copying needed."
-        )
-
-    # ---- [Skip Today] / NO ----------------------------------------------------
-    if intent in _BTN_SKIP or intent in ('no', 'n'):
-        skipped = _pending_brokers()
-        if not skipped:
-            conv.reset()
-            return _twiml("No pending reviews to skip. Your sessions are active.")
-        for b in skipped:
-            if b == 'Paytm Money':
-                _clear_paytm_pending()
-            else:
-                _clear_zerodha_pending()
-        conv.set_mode('post_skip', brokers=skipped)
-        # Send the post-skip interactive prompt (Add Input / Done) out-of-band
-        send_post_skip_prompt(skipped)
-        return _empty_twiml()   # buttons arrive via send_post_skip_prompt; no duplicate text
-
-    # ---- [Add Input] ----------------------------------------------------------
-    if intent in _BTN_ADD_INPUT:
-        conv.set_mode('awaiting_input')
-        return _twiml("Go ahead — type your portfolio query or instruction and I'll work on it.")
-
-    # ---- [Done] ---------------------------------------------------------------
-    if intent in _BTN_DONE or intent == 'done':
-        conv.reset()
-        return _twiml(
-            "Loop closed. No further reminders today.\n\n"
-            "I'll check in again tomorrow morning at the scheduled time."
-        )
-
-    # ---- [Continue] -----------------------------------------------------------
-    if intent in _BTN_CONTINUE or intent == 'continue':
-        conv.set_mode('awaiting_input')
-        return _twiml("Sure — send your next query or instruction.")
-
-    # ---- Free-text while awaiting_input ---------------------------------------
-    if mode == 'awaiting_input' and raw_body:
-        conv.append_note(raw_body)
-        return _twiml(
-            f'Got it, noted:\n\n_{raw_body}_\n\n'
-            f"I'll include this in the next portfolio review.\n\n"
-            f"Tap *Continue* to add more, or *Done* to close the loop."
-        )
-
-    # ---- Legacy: 32-char Zerodha token pasted manually -----------------------
-    match = _TOKEN_RE.search(raw_body)
-    if match:
-        raw_token = match.group(1)
-        try:
-            _save_enc_token(raw_token)
-            del raw_token
-            _clear_zerodha_pending()
-            conv.reset()
-            return _twiml(
-                "Zerodha token received and secured. "
-                "Holdings will appear in the next daily review."
-            )
-        except Exception:
-            return _twiml("Failed to save token — please try again.")
-
-    # ---- Unrecognised ---------------------------------------------------------
-    pending = _pending_brokers()
-    if pending:
-        return _twiml(
-            f"Auth pending for {' and '.join(pending)}.\n\n"
-            "Tap *Authenticate* to get the login link, or *Skip Today* to skip."
-        )
-    return _twiml(
-        "I didn't catch that.\n\n"
-        "If you'd like to add a portfolio note, tap *Add Input* from an earlier message, "
-        "or just type your query and I'll record it."
-    )
 
 
 # ---------------------------------------------------------------------------

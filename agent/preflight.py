@@ -2,7 +2,7 @@
 Pre-flight session validator.
 
 Silently tests Paytm, Zerodha, and tunnel connectivity using saved tokens.
-Never triggers a login flow, never sends WhatsApp, never writes sentinel files.
+Never triggers a login flow, never sends Slack, never writes sentinel files.
 
 Usage:
     from agent.preflight import validate_all

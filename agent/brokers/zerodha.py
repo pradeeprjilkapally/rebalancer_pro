@@ -4,7 +4,7 @@ Uses the official kiteconnect Python library.
 Auth tokens are saved daily — Zerodha tokens expire at 3:30 AM next day.
 
 Headless auth flow:
-  When running without a TTY (e.g. launchd at 8 AM), a WhatsApp message is sent
+  When running without a TTY (e.g. launchd at 8 AM), a Slack message is sent
   with the login URL. Drop the request_token into REQUEST_TOKEN_FILE, then the
   next invocation completes the exchange automatically.
 """
@@ -74,7 +74,7 @@ def get_kite_client() -> KiteConnect | None:
 def _login_flow(kite: KiteConnect, api_secret: str) -> KiteConnect | None:
     login_url = kite.login_url()
 
-    # Check if a request_token was received via WhatsApp webhook (encrypted)
+    # Check if a request_token was received via Slack webhook (encrypted)
     if os.path.exists(ENC_REQUEST_TOKEN_FILE):
         try:
             from agent.crypto import decrypt_token
@@ -94,14 +94,14 @@ def _login_flow(kite: KiteConnect, api_secret: str) -> KiteConnect | None:
 
     if headless:
         mark_pending(login_url)
-        print(f"  [Zerodha] Headless mode — sending auth ping to WhatsApp.")
+        print(f"  [Zerodha] Headless mode — posting login link to Slack.")
         print(f"  [Zerodha] Login URL: {login_url}")
         try:
-            from agent.whatsapp import send_auth_ping
-            send_auth_ping(['Zerodha'])
+            from agent.notify import notify_auth_needed
+            notify_auth_needed('Zerodha', login_url)
         except Exception as e:
-            print(f"  [Zerodha] WhatsApp send failed: {e}")
-        print("  [Zerodha] Review skipped — waiting for YES reply.")
+            print(f"  [Zerodha] Slack send failed: {e}")
+        print("  [Zerodha] Review skipped — tap the Slack link to authenticate.")
         return None
 
     # Interactive (TTY) mode
