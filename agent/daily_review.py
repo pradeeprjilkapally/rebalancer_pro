@@ -17,7 +17,7 @@ load_dotenv()
 
 from agent.rebalancer import analyse, print_portfolio, print_suggestions
 from agent.fire_analyser import analyse_fire, fire_aligned_suggestions
-from agent.whatsapp import send_whatsapp
+from agent.notify import notify
 
 _MYDATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'mydata')
 
@@ -152,10 +152,10 @@ def _write_file(broker: str, snapshot: dict, rebalance: list, fire: dict, fire_s
 
 
 # ---------------------------------------------------------------------------
-# Shared: WhatsApp message formatter
+# Shared: Slack summary formatter
 # ---------------------------------------------------------------------------
 
-def _format_whatsapp(broker: str, snapshot: dict, rebalance: list, fire: dict, fire_sugg: list) -> str:
+def _format_summary(broker: str, snapshot: dict, rebalance: list, fire: dict, fire_sugg: list) -> str:
     label        = 'Paytm Money' if broker == 'paytm' else 'Zerodha'
     holdings     = snapshot['holdings']
     total_sugg   = len(rebalance) + len(fire_sugg)
@@ -225,7 +225,7 @@ def run_paytm():
     print(f"\n  FIRE: {fire_data['progress_pct']:.1f}% — ~{fire_data['years_to_fire']:.1f} yrs to go")
 
     _write_file('paytm', snapshot, rebalance, fire_data, fire_sugg)
-    send_whatsapp(_format_whatsapp('paytm', snapshot, rebalance, fire_data, fire_sugg))
+    notify(_format_summary('paytm', snapshot, rebalance, fire_data, fire_sugg))
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +299,7 @@ def run_zerodha():
     print(f"\n  FIRE: {fire_data['progress_pct']:.1f}% — ~{fire_data['years_to_fire']:.1f} yrs to go")
 
     _write_file('zerodha', snapshot, rebalance, fire_data, fire_sugg)
-    send_whatsapp(_format_whatsapp('zerodha', snapshot, rebalance, fire_data, fire_sugg))
+    notify(_format_summary('zerodha', snapshot, rebalance, fire_data, fire_sugg))
 
 
 # ---------------------------------------------------------------------------

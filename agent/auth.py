@@ -71,14 +71,14 @@ def _login_flow(pm) -> bool:
 
     if headless:
         mark_pending(login_url)
-        print(f"  [Paytm] Headless mode — sending auth ping to WhatsApp.")
+        print(f"  [Paytm] Headless mode — posting login link to Slack.")
         try:
-            from agent.whatsapp import send_auth_ping
-            send_auth_ping(['Paytm Money'])
+            from agent.notify import notify_auth_needed
+            notify_auth_needed('Paytm Money', login_url)
         except Exception as e:
-            print(f"  [Paytm] WhatsApp send failed: {e}")
+            print(f"  [Paytm] Slack send failed: {e}")
             print(f"  [Paytm] Login URL: {login_url}")
-        print("  [Paytm] Review skipped — waiting for YES reply.")
+        print("  [Paytm] Review skipped — tap the Slack link to authenticate.")
         return False
 
     # Interactive (TTY) mode

@@ -38,34 +38,29 @@ jobs:
           # real broker API and are excluded from CI (run locally: pytest -m live).
           pytest -m "not live"
 
-  # Real-time alert: WhatsApp on any CI failure.
-  # Authenticates with a SCOPED Twilio API Key (not the primary account token),
-  # so a leak from GitHub is revocable without touching the account auth token.
-  # Requires repo secrets: TWILIO_ACCOUNT_SID (identifier, for the URL),
-  # TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET, TWILIO_WHATSAPP_FROM, TWILIO_WHATSAPP_TO.
-  # No-ops cleanly if any secret is unset.
+  # Real-time alert: Slack message on any CI failure.
+  # Requires repo secret SLACK_WEBHOOK_URL. No-ops cleanly if unset.
   notify:
     name: Notify on failure
     needs: test
     if: failure()
     runs-on: ubuntu-latest
     steps:
-      - name: WhatsApp alert via Twilio
+      - name: Slack alert
         env:
-          ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
-          KEY_SID:     ${{ secrets.TWILIO_API_KEY_SID }}
-          KEY_SECRET:  ${{ secrets.TWILIO_API_KEY_SECRET }}
-          FROM:        ${{ secrets.TWILIO_WHATSAPP_FROM }}
-          TO:          ${{ secrets.TWILIO_WHATSAPP_TO }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ -z "$ACCOUNT_SID" ] || [ -z "$KEY_SID" ] || [ -z "$KEY_SECRET" ] || [ -z "$FROM" ] || [ -z "$TO" ]; then
-            echo "Twilio API-key secrets not configured — skipping WhatsApp alert."
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL not configured — skipping alert."
             exit 0
           fi
           RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          BODY="CI FAILED on ${GITHUB_REF_NAME} (${GITHUB_REPOSITORY}). ${RUN_URL}"
-          curl -sS -X POST "https://api.twilio.com/2010-04-01/Accounts/${ACCOUNT_SID}/Messages.json" \
-            --data-urlencode "From=${FROM}" \
-            --data-urlencode "To=${TO}" \
-            --data-urlencode "Body=${BODY}" \
-            -u "${KEY_SID}:${KEY_SECRET}" -o /dev/null -w "Twilio HTTP %{http_code}\n"
+          TEXT=":red_circle: CI FAILED on *${GITHUB_REF_NAME}* (${GITHUB_REPOSITORY})\n${RUN_URL}"
+          HTTP=$(curl -sS -X POST -H 'Content-Type: application/json' \
+            --data "{\"text\":\"${TEXT}\"}" "$SLACK_WEBHOOK_URL" -o resp.txt -w "%{http_code}")
+          echo "Slack HTTP ${HTTP}: $(cat resp.txt)"
+          # Fail loudly if the alert didn't post — a silent alert is worse than none.
+          if [ "${HTTP}" != "200" ]; then
+            echo "::error::CI-failure Slack alert did not post (HTTP ${HTTP})."
+            exit 1
+          fi
