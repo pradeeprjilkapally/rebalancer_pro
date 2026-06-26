@@ -1,15 +1,20 @@
 """
-7 AM IST daily sanity check.
+Hourly health check (launchd: com.pradeep.sanity-check, StartInterval 3600).
 
-On failures:
-  - invokes `claude -p` to diagnose + fix + test + open a PR autonomously
-  - sends a Slack notification with the PR link (or failure summary if unfixable)
+Checks app/webhook, Cloudflare tunnel + relay, dashboard exposure, GitHub CI,
+broker tokens, and Slack. On failures:
+  - auto-fixable infra/code issues → invokes `claude -p` to diagnose + fix +
+    test + open a PR, then posts the PR link to Slack. An auto-fix cooldown
+    (_AUTOFIX_COOLDOWN_HOURS) stops a persistent failure from re-invoking Claude
+    every hour (token burn + duplicate PRs).
+  - human-action issues (auth sentinels, stale tokens, Slack/Access config) →
+    alerted to Slack directly, no Claude.
 
-Issues that require human action (auth sentinels, stale tokens) are flagged
-via Slack directly without invoking Claude.
+`python -m agent.sanity_check --report` runs the checks read-only (no auto-fix,
+no Slack, no file writes) — used by the on-demand `monitor` skill.
 """
+import argparse
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -27,7 +32,6 @@ from agent.brokers.zerodha import PENDING_FILE as _ZERODHA_PENDING
 from agent.notify import notify
 
 _REPO      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_TASK      = os.path.join(_REPO, 'task.md')
 _AI        = os.path.join(_REPO, 'action_items.md')
 _TURL      = os.path.join(_REPO, '.tunnel_url')
 _CLAUDE    = '/Users/pradeepreddyjilkapally/.local/bin/claude'
@@ -40,13 +44,19 @@ _TODAY     = datetime.now().strftime('%Y-%m-%d')
 _DATE_TAG  = datetime.now().strftime('%Y%m%d')
 _NOW_LABEL = datetime.now().strftime('%Y-%m-%d %H:%M IST')
 
+# Auto-fix cooldown — at the hourly cadence, a persistent failure must NOT
+# re-invoke Claude every hour (token burn + duplicate PRs). After an auto-fix
+# attempt, suppress further Claude invocations for this window; the hourly run
+# still alerts to Slack that the issue persists.
+_AUTOFIX_COOLDOWN_FILE  = os.path.join(_REPO, '.sanity_autofix_cooldown')
+_AUTOFIX_COOLDOWN_HOURS = 6
+
 # Checks that can be auto-fixed by Claude (code / infra issues)
 _AUTO_FIXABLE = {
     'Cloudflared process',
     'Tunnel (direct)',
     'Relay (Workers)',
     'Webhook (:5001)',
-    'Open tasks',
 }
 
 # Checks that require human action — Claude can alert but not fix
@@ -163,18 +173,6 @@ def check_tokens() -> tuple[bool, str]:
     return (not issues), '; '.join(issues)
 
 
-def check_task_md() -> tuple[bool, str]:
-    try:
-        content = open(_TASK).read()
-        stripped = re.sub(r'<!--.*?-->', '', content, flags=re.DOTALL)
-        active = re.findall(r'^Task:\s+(\d{2}-\d{6})', stripped, re.MULTILINE)
-        if active:
-            return False, f'Open tasks in task.md: {", ".join(active)}'
-        return True, ''
-    except Exception as e:
-        return False, f'Could not read task.md: {e}'
-
-
 def check_ci() -> tuple[bool, str]:
     """
     Daily backstop for the real-time GitHub Action alert: flag master if its
@@ -214,7 +212,6 @@ CHECKS = [
     ('Auth sentinels',     check_auth_sentinels),
     ('Tokens freshness',   check_tokens),
     ('CI (GitHub)',        check_ci),
-    ('Open tasks',         check_task_md),
 ]
 
 
@@ -308,19 +305,49 @@ def _append_action_item(item: str, notes: str):
 # Main
 # ---------------------------------------------------------------------------
 
-def main():
-    print(f'\n[{_NOW_LABEL}] Morning sanity check starting...')
-    failures = []
+def _autofix_cooldown_remaining() -> float:
+    """Hours left on the auto-fix cooldown, or 0.0 if clear to invoke Claude."""
+    try:
+        age_h = (time.time() - os.path.getmtime(_AUTOFIX_COOLDOWN_FILE)) / 3600
+    except OSError:
+        return 0.0
+    return max(0.0, _AUTOFIX_COOLDOWN_HOURS - age_h)
 
+
+def _mark_autofix():
+    """Stamp the cooldown so the next hourly runs don't re-invoke Claude."""
+    with open(_AUTOFIX_COOLDOWN_FILE, 'w') as f:
+        f.write(_NOW_LABEL)
+
+
+def _run_checks() -> list[tuple[str, str]]:
+    """Run every check; print a line per check; return the list of failures."""
+    failures = []
     for label, fn in CHECKS:
         try:
             ok, detail = fn()
         except Exception as e:
             ok, detail = False, f'check crashed: {e}'
-        status = 'OK  ' if ok else 'FAIL'
-        print(f'  [{status}] {label}' + (f' — {detail}' if detail else ''))
+        print(f'  [{"OK  " if ok else "FAIL"}] {label}' + (f' — {detail}' if detail else ''))
         if not ok:
             failures.append((label, detail))
+    return failures
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Portfolio agent health check.')
+    parser.add_argument('--report', action='store_true',
+                        help='Run checks and print status only — no auto-fix, no Slack, '
+                             'no action_items writes. Used by the on-demand `monitor` skill.')
+    args = parser.parse_args()
+
+    print(f'\n[{_NOW_LABEL}] Sanity check starting...')
+    failures = _run_checks()
+
+    # Read-only mode: report and exit non-zero on any failure.
+    if args.report:
+        print(f"\n  {'All checks passed ✓' if not failures else f'{len(failures)} failure(s)'}")
+        sys.exit(1 if failures else 0)
 
     if not failures:
         print('  All checks passed — no action needed.')
@@ -331,15 +358,21 @@ def main():
 
     print(f'\n  {len(failures)} failure(s): {len(fixable)} auto-fixable, {len(human_needed)} need human action')
 
-    # Auto-fix infra/code issues via Claude
+    # Auto-fix infra/code issues via Claude — but only if not on cooldown, so a
+    # persistent failure at the hourly cadence never re-triggers fixes/PRs.
     pr_url = None
-    if fixable:
+    on_cooldown = _autofix_cooldown_remaining() if fixable else 0.0
+    if fixable and not on_cooldown:
         try:
             pr_url = _invoke_claude(fixable)
+            _mark_autofix()
         except subprocess.TimeoutExpired:
             print('  [sanity] Claude timed out after 600s')
+            _mark_autofix()
         except Exception as e:
             print(f'  [sanity] Claude invocation failed: {e}')
+    elif fixable:
+        print(f'  [sanity] auto-fix on cooldown ({on_cooldown:.1f}h left) — alerting only, not re-invoking Claude')
 
     # Log human-required issues to action_items.md
     for label, detail in human_needed:
@@ -357,6 +390,8 @@ def main():
         names = ', '.join(label for label, _ in fixable)
         if pr_url:
             lines += [f'Auto-fixed: {names}', f'Review PR → {pr_url}']
+        elif on_cooldown:
+            lines.append(f'Still failing: {names} (auto-fix on cooldown {on_cooldown:.0f}h — earlier PR may be unmerged)')
         else:
             lines.append(f'Auto-fix tried: {names} (no PR — see logs/sanity_autofix.log)')
 

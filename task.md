@@ -28,6 +28,19 @@ Out-of-scope: what NOT to touch, so it doesn't wander.
 --------------------------------------------------------------------------------------------------
 
 Date:         2026-06-27
+Status:       complete 2026-06-27 — hourly health monitor + on-demand `monitor` skill + auto-fix cooldown; suite 93 passed, --report verified live
+Task:         02-270627
+Goal:         Turn the daily sanity check into an hourly health monitor (app/webhook, tunnel+relay, dashboard exposure, GitHub CI, tokens, Slack) that auto-fixes infra/code issues via `claude -p` → PR → Slack, without burning tokens when healthy.
+Constraints:  Detection must cost zero tokens (plain Python on launchd). Claude only on real auto-fixable failures, and NOT re-invoked every hour for a persistent issue (cooldown). No hourly Slack noise from non-health items. Keep the PR-not-merge human gate.
+Inputs:       agent/sanity_check.py, ~/Library/LaunchAgents/com.pradeep.sanity-check.plist, .claude/skills/.
+Outputs:      sanity_check.py: `--report` read-only mode + auto-fix cooldown (_AUTOFIX_COOLDOWN_HOURS) + removed non-health 'Open tasks' check; launchd switched 7AM→hourly (StartInterval 3600); new `.claude/skills/monitor` skill; tests for cooldown + report.
+Done-check:   `python -m agent.sanity_check --report` lists 9 health checks read-only (no Slack/fix); cooldown blocks re-invocation within window; deterministic suite green; hourly launchd job loaded.
+Out-of-scope: An autonomous hourly *Claude* loop (rejected — token cost); auto-merging PRs; new notification channels.
+
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
+Date:         2026-06-27
 Status:       complete 2026-06-27 — Basic Auth removed; exposure guard added + verified (relay 302 = not exposed); suite 90 passed
 Task:         01-270627
 Goal:         Drop the second dashboard auth layer (HTTP Basic Auth) now that Cloudflare Access (Google + email OTP) gates the dashboards, and add a sanity-check guard that alerts if the dashboard ever becomes publicly reachable.
