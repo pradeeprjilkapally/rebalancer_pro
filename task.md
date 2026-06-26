@@ -27,6 +27,16 @@ Out-of-scope: what NOT to touch, so it doesn't wander.
 --------------------------------------------------------------------------------------------------
 --------------------------------------------------------------------------------------------------
 
+Date:         2026-06-25
+Status:       complete 2026-06-25 — verify-before-publish + metrics-based watchdog; relay 200, chain green
+Task:         01-250625
+Goal:         Stop the morning sanity check failing on a dead tunnel URL — never publish an unverified URL to KV, and detect edge-disconnection fast via cloudflared metrics instead of flaky public DNS.
+Constraints:  Only touch agent/tunnel_manager.py. Quick-tunnel architecture stays. No secrets logged. Watchdog must not false-kill a healthy tunnel on a local-DNS blip.
+Inputs:       agent/tunnel_manager.py, scripts/verify_tunnel.py, live logs in ~/Library/Logs/rebalancer/
+Outputs:      tunnel_manager.py: pinned --metrics port; _ha_connections() liveness; verify-before-publish to .tunnel_url + KV.
+Done-check:   launchctl kickstart reloads tunnel job on new code; live log shows "Active URL"/"KV updated" only after reachable; python -m scripts.verify_tunnel → PASS.
+Out-of-scope: Cloudflare Worker (relay) source, named-tunnel migration, daily_review/webhook logic.
+
 <!-- Status: complete 2026-06-19 — split working, plists registered, both WhatsApp messages confirmed
 
 Date:         2026-06-18
