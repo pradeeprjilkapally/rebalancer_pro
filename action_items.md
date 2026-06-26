@@ -17,13 +17,12 @@ Functional feature work lives in `task.md`.
 
 | Filed | Target | Item | Owner | Notes |
 |-------|--------|------|-------|-------|
-| 2026-06-26 | 2026-06-26 (tonight) | **Fix Cloudflare Access bypass for machine paths** — BREAKS BROKER AUTH if left | Pradeep | Dashboards are correctly Access-protected now ✅, but `/callback`, `/paytm_callback`, `/health` are ALSO redirecting to the Access login (302 → cloudflareaccess.com) — they must be public or tomorrow's 8 AM broker OAuth fails. Fix in Zero Trust → Access → Applications: ensure THREE separate apps exist (paths `callback`, `paytm_callback`, `health`), each with policy **Action = Bypass** (NOT Allow — Allow+Everyone still forces login), Include = Everyone. Target: those 3 return origin status (200/400), not a 302 to cloudflareaccess. Safe fallback if stuck tonight: delete the broad dashboard Access app (reverts to known-good — callbacks work, dashboards keep Basic Auth). Ping Claude to re-verify end-to-end after. |
 | 2026-06-24 | dropped 2026-06-25 | ~~Enable branch protection on master~~ | Pradeep | Not available — private repo on a non-paid plan (branch protection/rulesets need GitHub Pro/Team for private repos). Mitigated by the pre-push hook + green CI; merges already go via PRs. |
 | 2026-06-25 | — | (optional) Local DNS can't resolve trycloudflare | Pradeep | Router `192.168.0.1` returns NXDOMAIN for `*.trycloudflare.com` (1.1.1.1/8.8.8.8 resolve fine). PR #7 makes the relay robust to this, but the sanity check's direct-tunnel probe still can't see it. Optional: set the Mac's DNS to 1.1.1.1/8.8.8.8 (System Settings → Network → DNS) or fix router DNS-rebind settings. |
 | 2026-06-23 | 2026-07-01 | Update gold grams + invested after next SIP | Pradeep | On July 1st SIP: open Paytm → Gold → note new grams total and new invested total → update `mydata/manual_holdings.json` grams + invested |
 | 2026-06-24 | — | Install pre-push hook on any other dev machine | Pradeep | `.git/hooks/` isn't version-controlled. On a fresh clone run: `cp scripts/hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push` |
 | 2026-06-24 | — | (ref) pmClient diverges from upstream | — | The CI fix edits `pmClient/apiService.py` (catch-all → `ConnectionError`), which CLAUDE.md marks read-only upstream. A future sync from `paytmmoney/pyPMClient` could re-introduce the 2-arg `httpx.HTTPError` bug — re-apply if so. |
-| 2026-06-23 | — | (ref) Dashboard login credentials | — | HTTP Basic Auth guards /dashboard_main, /dashboard_bkp, /fire-*. User `pradeep`, password in `.env` (`DASHBOARD_PASS`). Restart webhook after editing. |
+| 2026-06-27 | — | (ref) Dashboard access | — | Dashboards gated at the edge by Cloudflare Access (Google + email OTP, single email). No app-level password. Daily sanity check `Dashboard exposure` alerts if `/dashboard_main` ever becomes publicly reachable. |
 
 ## Parking lot / roadmap
 
@@ -38,6 +37,8 @@ Functional feature work lives in `task.md`.
 
 | Closed | Item | Notes |
 |--------|------|-------|
+| 2026-06-27 | Dashboard auth simplified to Access-only | Removed app-level HTTP Basic Auth (PR #10) + the `DASHBOARD_*` env vars; dashboards now gated solely by Cloudflare Access. Added sanity-check `Dashboard exposure` guard. Cleaned dead `TWILIO_*` env vars from `.env`. Verified live: `/dashboard_main` 302→Access (not exposed), callbacks/health public. |
+| 2026-06-27 | Cloudflare Access bypass fixed | Machine paths (`/callback`, `/paytm_callback`, `/health`) set to Bypass policy → return origin status (200/400), not Access login. Dashboards stay Access-gated. Broker OAuth no longer at risk. |
 | 2026-06-26 | Cloudflare Access on dashboards | `/dashboard_main` + `/dashboard_bkp` now require Cloudflare Access (302 → cloudflareaccess.com / `www-authenticate: Cloudflare-Access`). Machine-path bypass still pending — see Open. |
 | 2026-06-26 | SLACK_WEBHOOK_URL repo secret added | Confirmed set on rebalancer_pro; real-time CI-failure Slack alert active. Daily `check_ci` backstop also live. |
 | 2026-06-26 | Dashboard 404 outage fixed (PR #8) | tunnel_manager regex matched `api.trycloudflare.com` and published it to KV → relay forwarded to wrong origin (/dashboard_main 404). Regex now excludes api/update/www infra hosts. Merged `ad121f4`; relay restored + verified `/dashboard_main`=401. |

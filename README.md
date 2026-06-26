@@ -124,7 +124,6 @@ pyPMClient/
 | `ZERODHA_API_KEY` | Zerodha Kite Connect app key |
 | `ZERODHA_API_SECRET` | Zerodha Kite Connect app secret |
 | `SLACK_WEBHOOK_URL` | Slack incoming webhook for all notifications |
-| `DASHBOARD_USER` / `DASHBOARD_PASS` | HTTP Basic Auth for the dashboards |
 | `WEBHOOK_ENCRYPTION_KEY` | Key for Fernet encryption of tokens + snapshots at rest |
 | `WEBHOOK_PORT` | Flask port (default `5001`) |
 
@@ -171,5 +170,5 @@ cat .tunnel_url                      # current public tunnel URL
 
 - `.env` is never committed — all secrets stay local
 - Broker tokens and portfolio snapshots are encrypted at rest (Fernet + PBKDF2, 480k iterations); request tokens are erased immediately after use
-- Dashboards are gated by HTTP Basic Auth; the app binds to loopback and is reached only through the Cloudflare tunnel
+- Dashboards are gated at the edge by Cloudflare Access (Google + email OTP); the daily sanity check alerts if a dashboard ever becomes publicly reachable. The app binds to loopback and is reached only through the Cloudflare tunnel
 - No trades execute without explicit per-trade confirmation in the terminal
