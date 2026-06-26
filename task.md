@@ -27,6 +27,19 @@ Out-of-scope: what NOT to touch, so it doesn't wander.
 --------------------------------------------------------------------------------------------------
 --------------------------------------------------------------------------------------------------
 
+Date:         2026-06-27
+Status:       complete 2026-06-27 — Basic Auth removed; exposure guard added + verified (relay 302 = not exposed); suite 90 passed
+Task:         01-270627
+Goal:         Drop the second dashboard auth layer (HTTP Basic Auth) now that Cloudflare Access (Google + email OTP) gates the dashboards, and add a sanity-check guard that alerts if the dashboard ever becomes publicly reachable.
+Constraints:  Single sign-on (Access only) for dashboards; no app-level password to maintain. Machine paths (/callback, /paytm_callback, /health) stay Access-bypassed. Exposure guard must fail open on network blips (only a confirmed public 200 trips it). Security headers stay.
+Inputs:       agent/webhook.py (require_auth + _DASH_USER/_DASH_PASS), agent/sanity_check.py, tests/agent/.
+Outputs:      webhook.py: removed require_auth/_auth_ok/_DASH_* + hmac/functools imports + 4 @require_auth decorators; sanity_check.py: check_dashboard_exposure() (relay /dashboard_main must NOT be 200) in CHECKS + _HUMAN_REQUIRED; tests updated (test_webhook.py, test_sanity_dashboard_exposure.py); .env.example + CLAUDE.md updated.
+Done-check:   deterministic suite 90 passed; check_dashboard_exposure() returns OK against live relay (302); /dashboard_main serves 200 at app layer (Access gates at edge).
+Out-of-scope: Cloudflare Access dashboard config, tunnel/relay, notification channel.
+
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
 Date:         2026-06-25
 Status:       complete 2026-06-25 — verify-before-publish + metrics-based watchdog; relay 200, chain green
 Task:         01-250625
