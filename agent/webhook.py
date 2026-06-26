@@ -5,14 +5,12 @@ Routes
 ------
 GET  /callback         Zerodha OAuth redirect
 GET  /paytm_callback   Paytm Money OAuth redirect
-GET  /dashboard_main   Portfolio dashboard (Basic Auth)
+GET  /dashboard_main   Portfolio dashboard (gated at edge by Cloudflare Access)
 GET  /health           Liveness probe
 
 Permanent public URL (never changes):
   https://portfolio-relay.pradeeprjilkapally.workers.dev
 """
-import functools
-import hmac
 import json
 import os
 import re
@@ -39,35 +37,13 @@ app = Flask(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Access control — HTTP Basic Auth for the human-facing (read-only) views.
-# Machine endpoints (/callback, /paytm_callback, /health) stay open:
-# they are reached by Zerodha/Paytm OAuth redirects and the tunnel watchdog,
-# and are protected by token-format validation.
+# Access control — the dashboards are gated at the edge by Cloudflare Access
+# (Google + email OTP, scoped to a single email). The app keeps no second
+# password layer; the daily sanity check verifies the dashboard is never
+# publicly reachable, so an Access misconfiguration is alerted, not silent.
+# Machine endpoints (/callback, /paytm_callback, /health) are Access-bypassed
+# and protected by token-format validation.
 # ---------------------------------------------------------------------------
-_DASH_USER = os.getenv('DASHBOARD_USER', '')
-_DASH_PASS = os.getenv('DASHBOARD_PASS', '')
-
-
-def _auth_ok(user: str, pw: str) -> bool:
-    """Constant-time credential check. Fails closed if creds are unconfigured."""
-    if not _DASH_USER or not _DASH_PASS:
-        return False
-    return (hmac.compare_digest(user, _DASH_USER)
-            and hmac.compare_digest(pw, _DASH_PASS))
-
-
-def require_auth(view):
-    """Decorator: gate a view behind Basic Auth."""
-    @functools.wraps(view)
-    def wrapped(*args, **kwargs):
-        auth = request.authorization
-        if not auth or not _auth_ok(auth.username or '', auth.password or ''):
-            return Response(
-                'Authentication required.', 401,
-                {'WWW-Authenticate': 'Basic realm="Portfolio", charset="UTF-8"'},
-            )
-        return view(*args, **kwargs)
-    return wrapped
 
 
 @app.after_request
@@ -1276,7 +1252,6 @@ def _build_gold_context() -> dict | None:
 
 
 @app.route('/dashboard_main', methods=['GET'])
-@require_auth
 def dashboard_main():
     brokers = []
     for broker in ('paytm', 'zerodha'):
@@ -1845,7 +1820,6 @@ const obs=new IntersectionObserver(entries=>{
 # ---------------------------------------------------------------------------
 
 @app.route('/dashboard_bkp', methods=['GET'])
-@require_auth
 def dashboard_bkp():
     bkp = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                        'demo', 'my_portfolio.html')
@@ -1860,7 +1834,6 @@ def dashboard_bkp():
 # ---------------------------------------------------------------------------
 
 @app.route('/fire-designs', methods=['GET'])
-@require_auth
 def fire_designs():
     import json as _j
     fire_data = {
@@ -1886,7 +1859,6 @@ def fire_designs():
 # ---------------------------------------------------------------------------
 
 @app.route('/fire-preview', methods=['GET'])
-@require_auth
 def fire_preview():
     import json as _j
     fire_data = {
@@ -1922,10 +1894,6 @@ if __name__ == '__main__':
     import werkzeug.serving as _ws
     _ws.WSGIRequestHandler.server_version = 'portfolio'
     _ws.WSGIRequestHandler.sys_version = ''
-
-    if not _DASH_USER or not _DASH_PASS:
-        print('[webhook] WARNING: DASHBOARD_USER/DASHBOARD_PASS not set — '
-              'dashboard views will reject ALL access until configured in .env')
 
     # Bind to loopback when a tunnel fronts the app; the cloudflared tunnel
     # connects to localhost, so there is no need to listen on all interfaces.

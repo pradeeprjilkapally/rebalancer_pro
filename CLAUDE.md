@@ -34,7 +34,7 @@ Push target: **always `git push rebalancer master`** — never push to `origin` 
 | `agent/auth.py` | Paytm Money session management — token cache in `agent/.tokens.json` |
 | `agent/brokers/zerodha.py` | Zerodha Kite integration — auth, equity/MF/SIP fetch; tokens reset 3:30 AM daily |
 | `agent/notify.py` | Slack notifications — `notify()` posts to `SLACK_WEBHOOK_URL`, confirms delivery (HTTP 200 `ok`), falls back to console |
-| `agent/webhook.py` | Flask server — OAuth callbacks (`/callback`, `/paytm_callback`), dashboards (Basic Auth), `/health` |
+| `agent/webhook.py` | Flask server — OAuth callbacks (`/callback`, `/paytm_callback`), dashboards (gated at edge by Cloudflare Access), `/health` |
 | `agent/tunnel_manager.py` | Cloudflare tunnel — exposes webhook over public URL |
 | `agent/crypto.py` | Fernet encryption for stored tokens (`WEBHOOK_ENCRYPTION_KEY`) |
 | `pmClient/` | Paytm Money API SDK (upstream: `paytmmoney/pyPMClient`) — do not modify |

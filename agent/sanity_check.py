@@ -55,6 +55,7 @@ _HUMAN_REQUIRED = {
     'Tokens freshness',
     'CI (GitHub)',
     'Slack webhook',
+    'Dashboard exposure',
 }
 
 
@@ -98,6 +99,30 @@ def check_webhook() -> tuple[bool, str]:
         return ok, '' if ok else f'webhook returned {r.status_code}'
     except Exception as e:
         return False, f'webhook on :{port} not responding: {e}'
+
+
+def check_dashboard_exposure() -> tuple[bool, str]:
+    """
+    The dashboards carry full portfolio data and are protected ONLY by
+    Cloudflare Access (no app-level password). Verify they are NOT publicly
+    reachable: an unauthenticated hit to the relay /dashboard_main must NOT
+    return 200 — it should redirect to the Access login (302). A 200 means
+    Access is misconfigured and the portfolio is exposed.
+
+    Fails open on a network error (relay-reachability is covered by check_relay),
+    so a blip never false-alarms; only a confirmed 200 trips it.
+    """
+    if not _RELAY:
+        return True, ''
+    try:
+        r = requests.get(f'{_RELAY}/dashboard_main',
+                         allow_redirects=False, timeout=_TIMEOUT)
+    except Exception:
+        return True, ''
+    if r.status_code == 200:
+        return False, ('EXPOSED: /dashboard_main is publicly reachable (HTTP 200) — '
+                       'Cloudflare Access is not gating it; portfolio data is open')
+    return True, ''
 
 
 def check_slack() -> tuple[bool, str]:
@@ -184,6 +209,7 @@ CHECKS = [
     ('Tunnel (direct)',     check_tunnel_direct),
     ('Relay (Workers)',     check_relay),
     ('Webhook (:5001)',     check_webhook),
+    ('Dashboard exposure', check_dashboard_exposure),
     ('Slack webhook',      check_slack),
     ('Auth sentinels',     check_auth_sentinels),
     ('Tokens freshness',   check_tokens),
