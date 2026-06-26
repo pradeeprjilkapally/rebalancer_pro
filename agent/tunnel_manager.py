@@ -34,7 +34,13 @@ load_dotenv()
 _REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _URL_FILE = os.path.join(_REPO_DIR, '.tunnel_url')
 _CF_BIN   = '/opt/anaconda3/bin/cloudflared'
-_URL_RE   = re.compile(r'https://[a-z0-9-]+\.trycloudflare\.com')
+# Quick-tunnel hostnames are randomly-generated multi-word names
+# (e.g. tobacco-replication-attempting-zero.trycloudflare.com). cloudflared also
+# logs Cloudflare infrastructure hosts like api./update./www.trycloudflare.com —
+# the negative lookahead excludes those so we never publish a non-origin host to
+# KV (which silently broke the relay: api.trycloudflare.com/health is 200 but it
+# is not our webhook, so every real route 404'd).
+_URL_RE   = re.compile(r'https://(?!api\.|update\.|www\.)[a-z0-9-]+\.trycloudflare\.com')
 
 # Pin cloudflared's metrics server so the watchdog always knows where to read
 # ha_connections (cloudflared otherwise picks a random port per run).
