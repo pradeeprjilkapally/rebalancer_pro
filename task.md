@@ -25,6 +25,42 @@ Done-check:   the concrete test that proves it works.
 Out-of-scope: what NOT to touch, so it doesn't wander.
 -->
 --------------------------------------------------------------------------------------------------
+==================================================================================================
+MORNING TO-DO — 2026-06-28  (pending; do these when fresh)
+==================================================================================================
+
+[1] Paytm re-auth — DO FIRST.
+    Why: tokens are ~37h stale; the hourly monitor keeps flagging it on Slack.
+    How: run `python -m agent.daily_review --broker paytm` (or wait for the 7:45 AM job)
+         → it posts a Paytm login link to Slack → tap it → log in → tokens auto-save.
+    Done when: `monitor` (or `python -m agent.sanity_check --report`) shows Tokens freshness OK.
+
+[2] (optional) Fix local DNS so the Mac can resolve trycloudflare.
+    Why: router 192.168.0.1 returns NXDOMAIN for *.trycloudflare.com (relay already robust to
+         this after PR #7/#8, so this is comfort only).
+    How: System Settings → Network → (your Wi-Fi) → DNS → add 1.1.1.1 and 8.8.8.8.
+
+[3] 2026-07-01 — update gold holdings after the SIP.
+    How: Paytm → Gold → note new grams total + invested → edit mydata/manual_holdings.json
+         (gold.grams + gold.invested).
+
+Reference (no action needed): dashboards are Access-only now (Google OTP, no app password);
+pmClient/apiService.py diverges from upstream (re-apply the ConnectionError fix if you ever
+re-sync from paytmmoney/pyPMClient). Full chore log lives in action_items.md.
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
+Date:         2026-06-27
+Status:       complete 2026-06-27 — sanity-check auto-fixer now auto-merges to master after a green test gate; suite green
+Task:         03-270627
+Goal:         Let the hourly sanity check keep the app up unattended — auto-fixable infra/code failures get fixed AND merged to master (not just a PR), so no manual merge is needed at 3 AM. Scoped to sanity checks only; regular work still goes via PR + review.
+Constraints:  Merge ONLY if the deterministic suite (`pytest -m "not live"`) passes first (branch protection isn't available on this plan, so the test run is the gate). Always announce the merged PR on Slack (reviewable/revertible). Never auto-merge feature/regular work. Keep the 6h cooldown. No AI attribution in auto-fix commits.
+Inputs:       agent/sanity_check.py (`_invoke_claude` prompt + Slack wording), CLAUDE.md (project + global).
+Outputs:      _invoke_claude now instructs: fix → test → branch → push → PR → (if green) `gh pr merge --squash --delete-branch`; Slack says "Auto-fixed & merged"; project CLAUDE.md documents the opt-in; global CLAUDE.md nuanced to allow project opt-in while staying PR-only by default.
+Done-check:   suite green; next real infra incident merges its own fix + posts the merged PR to Slack.
+Out-of-scope: Named-tunnel migration (blocked on a domain); auto-merging regular task work.
+
+--------------------------------------------------------------------------------------------------
 --------------------------------------------------------------------------------------------------
 
 Date:         2026-06-27

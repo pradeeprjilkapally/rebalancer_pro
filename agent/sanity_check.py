@@ -221,8 +221,11 @@ CHECKS = [
 
 def _invoke_claude(fixable: list[tuple[str, str]]) -> str | None:
     """
-    Invoke claude CLI to fix `fixable` issues, create a PR, return PR URL.
-    Returns the PR URL string or None if it couldn't be determined.
+    Invoke claude CLI to fix `fixable` issues, open a PR, and — because these are
+    uptime-critical health incidents — MERGE it to master once the test suite is
+    green, so the app self-heals without waiting on a manual merge. Returns the
+    PR URL. (Auto-merge is scoped to sanity-check infra fixes only; regular task
+    work still goes via PR + Pradeep's review.)
     """
     if not os.path.isfile(_CLAUDE):
         print(f'  [sanity] claude CLI not found at {_CLAUDE}')
@@ -230,7 +233,7 @@ def _invoke_claude(fixable: list[tuple[str, str]]) -> str | None:
 
     issues_text = '\n'.join(f'- {label}: {detail}' for label, detail in fixable)
 
-    prompt = f"""Morning sanity check at {_NOW_LABEL} found these issues in the pyPMClient portfolio agent:
+    prompt = f"""Hourly sanity check at {_NOW_LABEL} found these issues in the pyPMClient portfolio agent:
 
 {issues_text}
 
@@ -238,17 +241,19 @@ Repository: {_REPO}
 Git remotes: origin = paytmmoney/pyPMClient (upstream, read-only), rebalancer = pradeeprjilkapally/rebalancer_pro (push here)
 PR target: master branch on pradeeprjilkapally/rebalancer_pro
 
-Execute the following fully without asking for confirmation:
-1. Diagnose each issue — read logs, check processes, inspect code
-2. Implement the code fix
-3. Test end-to-end (use existing scripts in scripts/ where applicable)
-4. Create git branch named: {_DATE_TAG}-<2-to-3-hyphenated-words-describing-the-fix>
-5. Commit with message: "<branch-name> - <what changed and why>"
-6. Push: git push rebalancer <branch-name>
-7. Create PR using: gh pr create --repo pradeeprjilkapally/rebalancer_pro --base master
-8. Print the PR URL as the absolute last line of your response — no other text after it
+This is an uptime-critical health fix. Execute fully without asking for confirmation:
+1. Diagnose each issue — read logs, check processes, inspect code.
+2. Implement the minimal code fix.
+3. Run the deterministic suite: (cd tests && python3 -m pytest -m "not live" -q). It MUST pass before you go further.
+4. Create branch: {_DATE_TAG}-<2-to-3-hyphenated-words-describing-the-fix>
+5. Commit (NO AI attribution — no Co-Authored-By, no "Generated with"): "<branch-name> - <what changed and why>"
+6. Push: git push rebalancer <branch-name>   (the pre-push hook re-runs the suite)
+7. Open the PR: gh pr create --repo pradeeprjilkapally/rebalancer_pro --base master
+8. AUTO-MERGE — only if step 3's suite passed: gh pr merge <pr> --repo pradeeprjilkapally/rebalancer_pro --squash --delete-branch
+   If the suite did NOT pass, DO NOT merge — leave the PR open for Pradeep.
+9. Print the PR URL as the absolute last line of your response — no other text after it.
 
-Rules: never push to origin. Never create a PR to paytmmoney/pyPMClient."""
+Rules: never push to origin; never PR to paytmmoney/pyPMClient; merge ONLY if tests pass; this auto-merge authority is for sanity-check infra fixes only."""
 
     log_path = os.path.join(_REPO, 'logs', 'sanity_autofix.log')
     print(f'  [sanity] invoking claude — log: {log_path}')
@@ -389,11 +394,11 @@ def main():
     if fixable:
         names = ', '.join(label for label, _ in fixable)
         if pr_url:
-            lines += [f'Auto-fixed: {names}', f'Review PR → {pr_url}']
+            lines += [f'Auto-fixed & merged to master: {names}', f'PR (FYI) → {pr_url}']
         elif on_cooldown:
-            lines.append(f'Still failing: {names} (auto-fix on cooldown {on_cooldown:.0f}h — earlier PR may be unmerged)')
+            lines.append(f'Still failing: {names} (auto-fix on cooldown {on_cooldown:.0f}h)')
         else:
-            lines.append(f'Auto-fix tried: {names} (no PR — see logs/sanity_autofix.log)')
+            lines.append(f'Auto-fix tried: {names} (not merged — tests failed or no PR; see logs/sanity_autofix.log)')
 
     if human_needed:
         lines.append('Needs you:')

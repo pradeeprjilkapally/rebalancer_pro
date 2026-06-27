@@ -69,8 +69,16 @@ All loaded from `.env` via `python-dotenv`. Copy `.env.example` to `.env` on a f
 |---|---|---|---|---|
 | Paytm Money daily review | 7:45 AM IST | 02:15 UTC | `python -m agent.daily_review --broker paytm` | Writes `mydata/paytm_suggestions.txt` + Slack |
 | Zerodha daily review | 8:00 AM IST | 02:30 UTC | `python -m agent.daily_review --broker zerodha` | Zerodha tokens reset ~3:30 AM; headless auth link posted to Slack |
+| Hourly health check | every hour | — | `python -m agent.sanity_check` | Auto-fixes infra/code failures via `claude -p`, **auto-merges to master after a green test suite**, posts the merged PR to Slack. 6h cooldown. Read-only status: `--report`. |
 
 Scheduled via macOS **launchd** (`~/Library/LaunchAgents/`). Wrap each command in `try/except`; prefix logs with `[cron]`.
+
+**Sanity-check auto-merge (project opt-in):** the hourly health check is allowed to
+**merge its own fix to master** — but ONLY when (a) the failure is an auto-fixable
+infra/code check, and (b) the deterministic suite (`pytest -m "not live"`) passes
+first. This keeps the app self-healing without waiting on a manual merge. It does
+**not** extend to regular/feature work, which always goes via PR for review. Every
+auto-merge is announced on Slack with the PR link so it can be reviewed/reverted.
 
 ---
 
