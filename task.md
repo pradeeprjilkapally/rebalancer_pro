@@ -50,6 +50,19 @@ re-sync from paytmmoney/pyPMClient). Full chore log lives in action_items.md.
 --------------------------------------------------------------------------------------------------
 --------------------------------------------------------------------------------------------------
 
+Date:         2026-06-28
+Status:       complete 2026-06-28 — token alerts now @-tag + carry a tappable mobile login link; hourly alert flood fixed (cooldown + dedup); suite 96
+Task:         01-280628
+Goal:         When a Paytm/Zerodha token is needed, Slack-tag Pradeep with a tappable login link so he can re-auth from his phone (no laptop). Stop the hourly sanity check from flooding Slack + action_items with the same persistent alert.
+Constraints:  Tag via SLACK_USER_ID (fallback <!channel>). Login URL built offline (no session). Alert the SAME failure set at most once per 12h; a changed set or a fresh auto-merge alerts immediately. action_items rows deduped (one per issue, no date in label). No secrets logged.
+Inputs:       agent/notify.py, agent/sanity_check.py, .env.example, CLAUDE.md.
+Outputs:      notify.py: `_mention()` + `notify(tag=…)` + tagged link-bearing `notify_auth_needed`; sanity_check.py: `_broker_login_url()` (paytm/zerodha offline URL), `_alert_suppressed()` 12h cooldown, deduped `_append_action_item`, token-issue → tagged login link; SLACK_USER_ID documented; collapsed 11 duplicate ledger rows → 1.
+Done-check:   suite 96 green; `_broker_login_url` returns valid login URLs offline; cooldown suppresses repeat identical alerts; ledger dedups.
+Out-of-scope: Named-tunnel migration (waiting on the free domain); auto-resetting tokens (broker login is interactive by design).
+
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
 Date:         2026-06-27
 Status:       complete 2026-06-27 — sanity-check auto-fixer now auto-merges to master after a green test gate; suite green
 Task:         03-270627

@@ -17,6 +17,7 @@ Functional feature work lives in `task.md`.
 
 | Filed | Target | Item | Owner | Notes |
 |-------|--------|------|-------|-------|
+| 2026-06-27 | — | [sanity] Tokens freshness | Claude | Paytm token stale — tap the Slack login link to re-auth from your phone (now deduped + 12h alert cooldown) |
 | 2026-06-24 | dropped 2026-06-25 | ~~Enable branch protection on master~~ | Pradeep | Not available — private repo on a non-paid plan (branch protection/rulesets need GitHub Pro/Team for private repos). Mitigated by the pre-push hook + green CI; merges already go via PRs. |
 | 2026-06-25 | — | (optional) Local DNS can't resolve trycloudflare | Pradeep | Router `192.168.0.1` returns NXDOMAIN for `*.trycloudflare.com` (1.1.1.1/8.8.8.8 resolve fine). PR #7 makes the relay robust to this, but the sanity check's direct-tunnel probe still can't see it. Optional: set the Mac's DNS to 1.1.1.1/8.8.8.8 (System Settings → Network → DNS) or fix router DNS-rebind settings. |
 | 2026-06-23 | 2026-07-01 | Update gold grams + invested after next SIP | Pradeep | On July 1st SIP: open Paytm → Gold → note new grams total and new invested total → update `mydata/manual_holdings.json` grams + invested |
@@ -37,6 +38,7 @@ Functional feature work lives in `task.md`.
 
 | Closed | Item | Notes |
 |--------|------|-------|
+| 2026-06-27 | Hourly health monitor + `monitor` skill (PR #12) | sanity_check now hourly (launchd StartInterval 3600); auto-fix→PR→Slack only on real incidents, 6h cooldown; `--report` read-only mode + on-demand `monitor` skill; removed non-health open-tasks check. Token-aware design captured in global CLAUDE.md. Merged. |
 | 2026-06-27 | Dashboard auth simplified to Access-only | Removed app-level HTTP Basic Auth (PR #10) + the `DASHBOARD_*` env vars; dashboards now gated solely by Cloudflare Access. Added sanity-check `Dashboard exposure` guard. Cleaned dead `TWILIO_*` env vars from `.env`. Verified live: `/dashboard_main` 302→Access (not exposed), callbacks/health public. |
 | 2026-06-27 | Cloudflare Access bypass fixed | Machine paths (`/callback`, `/paytm_callback`, `/health`) set to Bypass policy → return origin status (200/400), not Access login. Dashboards stay Access-gated. Broker OAuth no longer at risk. |
 | 2026-06-26 | Cloudflare Access on dashboards | `/dashboard_main` + `/dashboard_bkp` now require Cloudflare Access (302 → cloudflareaccess.com / `www-authenticate: Cloudflare-Access`). Machine-path bypass still pending — see Open. |

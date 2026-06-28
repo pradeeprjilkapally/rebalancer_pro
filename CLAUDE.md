@@ -54,6 +54,7 @@ All loaded from `.env` via `python-dotenv`. Copy `.env.example` to `.env` on a f
 | `ZERODHA_API_KEY` | `brokers/zerodha.py` | Zerodha Kite API key |
 | `ZERODHA_API_SECRET` | `brokers/zerodha.py` | Zerodha Kite API secret |
 | `SLACK_WEBHOOK_URL` | `notify.py` | Slack incoming webhook for all proactive notifications |
+| `SLACK_USER_ID` | `notify.py` | Your Slack member ID — @-tags you on token/auth alerts; falls back to `<!channel>` if unset |
 | `WEBHOOK_PORT` | `webhook.py` | Flask port (default `5001`) |
 | `WEBHOOK_ENCRYPTION_KEY` | `crypto.py` | Fernet key for token encryption |
 | `CLOUDFLARE_API_TOKEN` | `tunnel_manager.py` | Cloudflare API token for tunnel |
