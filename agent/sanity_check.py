@@ -14,6 +14,7 @@ broker tokens, and Slack. On failures:
 no Slack, no file writes) — used by the on-demand `monitor` skill.
 """
 import argparse
+import hashlib
 import os
 import shutil
 import subprocess
@@ -29,7 +30,7 @@ load_dotenv()
 
 from agent.auth import PENDING_FILE as _PAYTM_PENDING
 from agent.brokers.zerodha import PENDING_FILE as _ZERODHA_PENDING
-from agent.notify import notify
+from agent.notify import notify, notify_auth_needed
 
 _REPO      = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _AI        = os.path.join(_REPO, 'action_items.md')
@@ -50,6 +51,12 @@ _NOW_LABEL = datetime.now().strftime('%Y-%m-%d %H:%M IST')
 # still alerts to Slack that the issue persists.
 _AUTOFIX_COOLDOWN_FILE  = os.path.join(_REPO, '.sanity_autofix_cooldown')
 _AUTOFIX_COOLDOWN_HOURS = 6
+
+# Alert cooldown — at the hourly cadence, an unchanged set of failures must not
+# re-ping Slack / re-log to action_items every hour. Re-alert the SAME failure
+# set at most once per window (a changed set or a fresh auto-merge alerts now).
+_ALERT_STATE_FILE     = os.path.join(_REPO, '.sanity_alert_state')
+_ALERT_COOLDOWN_HOURS = 12
 
 # Checks that can be auto-fixed by Claude (code / infra issues)
 _AUTO_FIXABLE = {
@@ -294,6 +301,10 @@ Rules: never push to origin; never PR to paytmmoney/pyPMClient; merge ONLY if te
 def _append_action_item(item: str, notes: str):
     try:
         content = open(_AI).read()
+        # Dedup: don't add a row whose item label already appears (hourly runs
+        # otherwise pile up identical rows for the same persisting issue).
+        if f'| {item} |' in content:
+            return
         new_row = f'| {_TODAY} | — | {item} | Claude | {notes} |'
         content = content.replace(
             '|-------|--------|------|-------|-------|',
@@ -304,6 +315,48 @@ def _append_action_item(item: str, notes: str):
             f.write(content)
     except Exception as e:
         print(f'  [sanity] Could not update action_items.md: {e}')
+
+
+def _alert_suppressed(failures: list[tuple[str, str]]) -> bool:
+    """
+    True if this exact set of failure labels was already alerted within the
+    cooldown window — so an unchanged situation doesn't re-ping every hour.
+    A new/changed failure set (or first occurrence) returns False and refreshes
+    the stamp.
+    """
+    sig = hashlib.sha1('|'.join(sorted(l for l, _ in failures)).encode()).hexdigest()[:12]
+    try:
+        prev_sig, prev_ts = open(_ALERT_STATE_FILE).read().split(',')
+        if sig == prev_sig and (time.time() - float(prev_ts)) / 3600 < _ALERT_COOLDOWN_HOURS:
+            return True
+    except (OSError, ValueError):
+        pass
+    with open(_ALERT_STATE_FILE, 'w') as f:
+        f.write(f'{sig},{time.time()}')
+    return False
+
+
+def _broker_login_url(broker: str) -> str | None:
+    """
+    Build a fresh OAuth login URL for re-auth (offline — no session needed), so a
+    token alert can carry a tappable link. Returns None if creds are missing.
+    """
+    try:
+        if broker == 'paytm':
+            key, secret = os.getenv('PAYTM_API_KEY', ''), os.getenv('PAYTM_API_SECRET', '')
+            if not key or not secret:
+                return None
+            from pmClient.pmClient import PMClient
+            return PMClient(api_secret=secret, api_key=key).login(f'sanity_{os.getpid()}')
+        if broker == 'zerodha':
+            key = os.getenv('ZERODHA_API_KEY', '')
+            if not key:
+                return None
+            from kiteconnect import KiteConnect
+            return KiteConnect(api_key=key).login_url()
+    except Exception as e:
+        print(f'  [sanity] could not build {broker} login URL: {e}')
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -379,14 +432,36 @@ def main():
     elif fixable:
         print(f'  [sanity] auto-fix on cooldown ({on_cooldown:.1f}h left) — alerting only, not re-invoking Claude')
 
-    # Log human-required issues to action_items.md
-    for label, detail in human_needed:
-        _append_action_item(
-            f'[sanity {_TODAY}] {label}',
-            detail.replace('|', '/'),
-        )
+    # Suppress repeat alerts for an unchanged failure set (hourly cadence would
+    # otherwise ping every hour). A fresh auto-merge always announces.
+    if not pr_url and _alert_suppressed(failures):
+        print('  [sanity] same failures alerted within cooldown — staying quiet this run')
+        return
 
-    # Compose Slack notification — short and glanceable.
+    # Token/auth issues → send a tagged Slack message with a tappable login link
+    # so the token can be reset from a phone, no laptop. (check label → broker)
+    token_brokers = []
+    if any(l == 'Tokens freshness' for l, _ in human_needed):
+        token_brokers.append('paytm')
+    for _, detail in human_needed:
+        if 'Zerodha' in detail and 'zerodha' not in token_brokers:
+            token_brokers.append('zerodha')
+    for broker in token_brokers:
+        url = _broker_login_url(broker)
+        label = 'Paytm Money' if broker == 'paytm' else 'Zerodha'
+        if url:
+            notify_auth_needed(label, url)        # tagged + tappable link
+        else:
+            notify(f'*{label} — token needed* but a login link could not be built '
+                   f'(check API creds). Reset it from the app.', tag=True)
+
+    # Log human-required issues to action_items.md (deduped inside). The label
+    # carries NO date (the row's Filed column has it), so a persistent issue
+    # maps to one stable row instead of one-per-day.
+    for label, detail in human_needed:
+        _append_action_item(f'[sanity] {label}', detail.replace('|', '/'))
+
+    # Summary message — short and glanceable; tag only when something needs you.
     hhmm = datetime.now().strftime('%H:%M')
     n    = len(failures)
     lines = [f'⚠️ Sanity check {hhmm} IST — {n} issue{"s" if n != 1 else ""}']
@@ -404,7 +479,7 @@ def main():
         lines.append('Needs you:')
         lines += [f'• {detail}' for _, detail in human_needed]
 
-    notify('\n'.join(lines))
+    notify('\n'.join(lines), tag=bool(human_needed))
     print('  Slack notification sent.')
 
 
