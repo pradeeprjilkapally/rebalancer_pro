@@ -86,10 +86,19 @@ def check_cloudflared() -> tuple[bool, str]:
     return ok, '' if ok else 'cloudflared process not running'
 
 
+# Cloudflare infra hosts the published tunnel URL must never be — a stale/buggy
+# publish to one of these makes /health answer 200 (CF's own response) while
+# every real route 404s, which silently hid a multi-day outage.
+_BAD_TUNNEL_HOSTS = {'api.trycloudflare.com', 'update.trycloudflare.com', 'www.trycloudflare.com'}
+
+
 def check_tunnel_direct() -> tuple[bool, str]:
     url = ''
     try:
         url = open(_TURL).read().strip()
+        host = url.split('//')[-1].split('/')[0]
+        if host in _BAD_TUNNEL_HOSTS:
+            return False, f'published tunnel URL is a Cloudflare infra host ({host}) — stale/bad publish; restart the tunnel'
         r = requests.get(f'{url}/health', timeout=_TIMEOUT)
         ok = r.status_code < 500
         return ok, '' if ok else f'tunnel returned {r.status_code}'
@@ -98,12 +107,21 @@ def check_tunnel_direct() -> tuple[bool, str]:
 
 
 def check_relay() -> tuple[bool, str]:
+    """
+    Verify the relay reaches OUR webhook, not just any 200. Probe /callback, a
+    webhook fingerprint: our app returns 400 (missing token), whereas a wrong
+    origin (e.g. api.trycloudflare.com from a stale tunnel URL) returns 404.
+    /health alone is unreliable — Cloudflare's own hosts also answer it 200.
+    """
     if not _RELAY:
         return False, 'WORKERS_RELAY_URL not set'
     try:
-        r = requests.get(f'{_RELAY}/health', timeout=_TIMEOUT)
-        ok = r.status_code < 500
-        return ok, '' if ok else f'relay returned {r.status_code}'
+        r = requests.get(f'{_RELAY}/callback', timeout=_TIMEOUT, allow_redirects=False)
+        if r.status_code == 404:
+            return False, 'relay not reaching the webhook (wrong/stale tunnel origin) — restart the tunnel'
+        if r.status_code >= 500:
+            return False, f'relay/webhook error {r.status_code}'
+        return True, ''
     except Exception as e:
         return False, f'relay unreachable: {e}'
 
@@ -375,6 +393,33 @@ def _autofix_cooldown_remaining() -> float:
     return min(_AUTOFIX_COOLDOWN_HOURS, max(0.0, _AUTOFIX_COOLDOWN_HOURS - age_h))
 
 
+_RESTART_MAP = {
+    'Cloudflared process': 'com.pradeep.zerodha-tunnel',
+    'Tunnel (direct)':     'com.pradeep.zerodha-tunnel',
+    'Relay (Workers)':     'com.pradeep.zerodha-tunnel',
+    'Webhook (:5001)':     'com.pradeep.zerodha-webhook',
+}
+
+
+def _restart_services(failed_labels: set) -> set:
+    """
+    Kickstart the launchd service(s) backing the failed infra checks. Infra
+    failures are usually a stale/wedged process (the 4-day-stale tunnel manager
+    that re-grabbed api.trycloudflare.com was exactly this) — a restart is the
+    cheap, no-token fix before escalating to a code change.
+    """
+    services = {svc for lbl, svc in _RESTART_MAP.items() if lbl in failed_labels}
+    uid = os.getuid() if hasattr(os, 'getuid') else 0   # getuid is POSIX-only (Windows CI)
+    for svc in services:
+        try:
+            subprocess.run(['launchctl', 'kickstart', '-k', f'gui/{uid}/{svc}'],
+                           timeout=15, capture_output=True)
+            print(f'  [sanity] restarted {svc}')
+        except Exception as e:
+            print(f'  [sanity] restart {svc} failed: {e}')
+    return services
+
+
 def _mark_autofix():
     """Stamp the cooldown so the next hourly runs don't re-invoke Claude."""
     with open(_AUTOFIX_COOLDOWN_FILE, 'w') as f:
@@ -419,21 +464,31 @@ def main():
 
     print(f'\n  {len(failures)} failure(s): {len(fixable)} auto-fixable, {len(human_needed)} need human action')
 
-    # Auto-fix infra/code issues via Claude — but only if not on cooldown, so a
-    # persistent failure at the hourly cadence never re-triggers fixes/PRs.
+    # Remediate infra/code issues — one cooldown so a persistent failure never
+    # thrashes at the hourly cadence. Restart first (cheap, fixes the common
+    # stale-process cause); escalate to a Claude code-fix PR only if it persists.
     pr_url = None
     on_cooldown = _autofix_cooldown_remaining() if fixable else 0.0
     if fixable and not on_cooldown:
-        try:
-            pr_url = _invoke_claude(fixable)
-            _mark_autofix()
-        except subprocess.TimeoutExpired:
-            print('  [sanity] Claude timed out after 600s')
-            _mark_autofix()
-        except Exception as e:
-            print(f'  [sanity] Claude invocation failed: {e}')
+        _mark_autofix()
+        fixable_labels = {l for l, _ in fixable}
+        restarted = _restart_services(fixable_labels)
+        still_failing = fixable
+        if restarted:
+            time.sleep(20)                       # let services come back up
+            check_fn = dict(CHECKS)
+            still_failing = [(l, d) for l in fixable_labels
+                             for ok, d in [check_fn[l]()] if not ok]
+            print(f'  [sanity] after restart: {len(still_failing)} of {len(fixable)} still failing')
+        if still_failing:                        # restart didn't fix it → code bug
+            try:
+                pr_url = _invoke_claude(still_failing)
+            except subprocess.TimeoutExpired:
+                print('  [sanity] Claude timed out after 600s')
+            except Exception as e:
+                print(f'  [sanity] Claude invocation failed: {e}')
     elif fixable:
-        print(f'  [sanity] auto-fix on cooldown ({on_cooldown:.1f}h left) — alerting only, not re-invoking Claude')
+        print(f'  [sanity] remediation on cooldown ({on_cooldown:.1f}h left) — alerting only')
 
     # Suppress repeat alerts for an unchanged failure set (hourly cadence would
     # otherwise ping every hour). A fresh auto-merge always announces.
@@ -472,11 +527,11 @@ def main():
     if fixable:
         names = ', '.join(label for label, _ in fixable)
         if pr_url:
-            lines += [f'Auto-fixed & merged to master: {names}', f'PR (FYI) → {pr_url}']
+            lines += [f"Restart didn't fix {names} → code-fixed & merged to master", f'PR (FYI) → {pr_url}']
         elif on_cooldown:
-            lines.append(f'Still failing: {names} (auto-fix on cooldown {on_cooldown:.0f}h)')
+            lines.append(f'Still failing: {names} (remediation on cooldown {on_cooldown:.0f}h)')
         else:
-            lines.append(f'Auto-fix tried: {names} (not merged — tests failed or no PR; see logs/sanity_autofix.log)')
+            lines.append(f'Auto-restarted service(s) for: {names} — next run verifies recovery')
 
     if human_needed:
         lines.append('Needs you:')
