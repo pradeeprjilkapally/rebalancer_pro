@@ -369,7 +369,10 @@ def _autofix_cooldown_remaining() -> float:
         age_h = (time.time() - os.path.getmtime(_AUTOFIX_COOLDOWN_FILE)) / 3600
     except OSError:
         return 0.0
-    return max(0.0, _AUTOFIX_COOLDOWN_HOURS - age_h)
+    # Clamp to [0, window]: filesystem mtime resolution can make age slightly
+    # negative right after writing (seen on Windows CI), which would otherwise
+    # push 'remaining' above the window.
+    return min(_AUTOFIX_COOLDOWN_HOURS, max(0.0, _AUTOFIX_COOLDOWN_HOURS - age_h))
 
 
 def _mark_autofix():
