@@ -70,5 +70,5 @@ def test_write_handoff_records_owner_and_branch(tmp_path, monkeypatch):
     monkeypatch.setattr(tm, '_HANDOFF_MD', str(tmp_path / 'HANDOFF.md'))
     monkeypatch.setattr(tm, '_git', lambda *a: 'feature/x' if a[0] == 'rev-parse' else '')
     tm.write_handoff('codex', 91.0, 4_800_000)
-    text = (tmp_path / 'HANDOFF.md').read_text()
+    text = (tmp_path / 'HANDOFF.md').read_text(encoding='utf-8')
     assert 'Owner: codex' in text and 'feature/x' in text and '`resume`' in text

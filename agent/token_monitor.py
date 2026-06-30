@@ -160,7 +160,7 @@ Uncommitted changes:
    active task in task.md from where it stopped.
 3. Finish per the review-gate (tests -> commit -> PR -> Slack). Same skills both sides.
 """
-    with open(_HANDOFF_MD, 'w') as f:
+    with open(_HANDOFF_MD, 'w', encoding='utf-8') as f:   # body has →/— (non-cp1252)
         f.write(body)
 
 
