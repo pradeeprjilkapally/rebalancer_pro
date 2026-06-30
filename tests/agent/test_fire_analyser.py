@@ -55,6 +55,54 @@ def test_manual_mf_is_included_in_denominator():
     assert not any(s['category'] == 'Gold' for s in suggestions)
 
 
+def test_manual_mf_inside_snapshot_is_not_treated_as_large_cap():
+    snap = {
+        'total_portfolio': 1_000_000,
+        'total_equity': 1_000_000,
+        'holdings': [
+            {
+                'source': 'manual_mf',
+                'name': 'ICICI Prudential Multi-Asset Fund',
+                'current_value': 900_000,
+            },
+            {
+                'source': 'broker',
+                'name': 'LIC',
+                'current_value': 100_000,
+            },
+        ],
+    }
+
+    suggestions = fa.fire_aligned_suggestions(snap)
+
+    assert all(s['category'] != 'Gold' for s in suggestions)
+    large_cap = next(s for s in suggestions if s['category'] == 'Mid & Small Cap')
+    assert large_cap['reason'].endswith('(full portfolio basis)')
+
+
+def test_manual_gold_inside_snapshot_is_not_double_counted():
+    snap = {
+        'total_portfolio': 1_000_000,
+        'total_equity': 1_000_000,
+        'holdings': [
+            {
+                'source': 'manual_gold',
+                'name': 'Paytm Gold (Gold)',
+                'current_value': 100_000,
+            },
+            {
+                'source': 'manual_mf',
+                'name': 'ICICI Prudential Multi-Asset Fund',
+                'current_value': 900_000,
+            },
+        ],
+    }
+
+    suggestions = fa.fire_aligned_suggestions(snap, manual_mf=900_000, manual_gold=100_000)
+
+    assert not any(s['category'] == 'Gold' for s in suggestions)
+
+
 def test_empty_portfolio_yields_no_suggestions():
     snap = {'total_portfolio': 0, 'total_equity': 0, 'holdings': []}
     assert fa.fire_aligned_suggestions(snap) == []

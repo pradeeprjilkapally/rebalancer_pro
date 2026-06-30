@@ -70,6 +70,7 @@ All loaded from `.env` via `python-dotenv`. Copy `.env.example` to `.env` on a f
 |---|---|---|---|---|
 | Paytm Money daily review | 7:45 AM IST | 02:15 UTC | `python -m agent.daily_review --broker paytm` | Writes `mydata/paytm_suggestions.txt` + Slack |
 | Zerodha daily review | 8:00 AM IST | 02:30 UTC | `python -m agent.daily_review --broker zerodha` | Zerodha tokens reset ~3:30 AM; headless auth link posted to Slack |
+| Dashboard ping + refresh | 7:50 AM, 12:00 PM, 3:00 PM IST | — | `python -m agent.dashboard_ping` | Refreshes Paytm/Zerodha encrypted dashboard snapshots, then posts compact Slack link |
 | Hourly health check | every hour | — | `python -m agent.sanity_check` | Auto-fixes infra/code failures via `claude -p`, **auto-merges to master after a green test suite**, posts the merged PR to Slack. 6h cooldown. Read-only status: `--report`. |
 
 Scheduled via macOS **launchd** (`~/Library/LaunchAgents/`). Wrap each command in `try/except`; prefix logs with `[cron]`.

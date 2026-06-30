@@ -2,12 +2,13 @@
 Dashboard ping — sends a compact Slack snapshot 3× daily.
 Scheduled at 7:50 AM, 12:00 PM, 3:00 PM IST via launchd.
 
-Reads the last daily-review JSON (paytm_data.json / zerodha_data.json) for
-broker totals, fetches live MF NAV and gold price for manual holdings, and
-sends a single link-first message to Slack.
+Refreshes broker snapshots first, reads the encrypted dashboard data for broker
+totals, fetches live MF NAV and gold price for manual holdings, and sends a
+single link-first message to Slack.
 
 Separate from the morning review notification (which includes suggestions).
 """
+import argparse
 import json
 import os
 import sys
@@ -22,12 +23,34 @@ _MYDATA  = os.path.join(_REPO, 'mydata')
 _RELAY   = os.getenv('WORKERS_RELAY_URL', 'https://portfolio-relay.pradeeprjilkapally.workers.dev')
 
 
-def _load_json(name: str) -> dict:
-    path = os.path.join(_MYDATA, name)
+def _load_snapshot(broker: str) -> dict:
+    enc_path = os.path.join(_MYDATA, f'{broker}_data.json.enc')
     try:
-        return json.load(open(path))
-    except Exception:
+        from agent.crypto import read_encrypted
+        return read_encrypted(enc_path)
+    except FileNotFoundError:
+        legacy = os.path.join(_MYDATA, f'{broker}_data.json')
+        try:
+            return json.load(open(legacy))
+        except Exception:
+            return {}
+    except Exception as e:
+        print(f'[ping] could not load {broker} snapshot: {e}')
         return {}
+
+
+def refresh_snapshots() -> None:
+    """Refresh broker dashboard snapshots without sending review summaries."""
+    from agent import daily_review
+
+    for broker, runner in (('paytm', daily_review.run_paytm), ('zerodha', daily_review.run_zerodha)):
+        try:
+            print(f'[ping] refreshing {broker} snapshot')
+            runner(send_slack=False)
+        except SystemExit as e:
+            print(f'[ping] {broker} refresh exited: {e.code}')
+        except Exception as e:
+            print(f'[ping] {broker} refresh failed: {e}')
 
 
 def _manual_values() -> dict:
@@ -90,13 +113,24 @@ def _fmt_pnl(value: float, invested: float) -> str:
     return f'{sign}{pnl_pct:.1f}%'
 
 
+def _broker_total(data: dict) -> float:
+    snapshot = data.get('snapshot', {})
+    holdings = snapshot.get('holdings', [])
+    equity = sum(
+        h.get('current_value', 0)
+        for h in holdings
+        if h.get('source', 'broker') not in ('manual_gold', 'manual_mf')
+    )
+    return equity + snapshot.get('available_cash', 0)
+
+
 def build_message(label: str) -> str:
-    paytm   = _load_json('paytm_data.json')
-    zerodha = _load_json('zerodha_data.json')
+    paytm   = _load_snapshot('paytm')
+    zerodha = _load_snapshot('zerodha')
     manual  = _manual_values()
 
-    paytm_total   = paytm.get('snapshot', {}).get('total_portfolio', 0)
-    zerodha_total = zerodha.get('snapshot', {}).get('total_portfolio', 0)
+    paytm_total   = _broker_total(paytm)
+    zerodha_total = _broker_total(zerodha)
     mf_value      = manual.get('mf_value', 0)
     gold_value    = manual.get('gold_value', 0)
 
@@ -130,8 +164,16 @@ def build_message(label: str) -> str:
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--skip-refresh', action='store_true',
+                        help='Send the Slack ping from the last encrypted snapshots only.')
+    args = parser.parse_args()
+
     now   = datetime.now()
     label = now.strftime('%-I:%M %p IST')
+
+    if not args.skip_refresh:
+        refresh_snapshots()
 
     try:
         msg = build_message(label)

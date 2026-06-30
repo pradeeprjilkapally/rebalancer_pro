@@ -23,7 +23,7 @@ load_dotenv()
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agent.crypto import encrypt_token, read_encrypted
-from agent.gold_price import build_svg_chart, load_history as load_gold_history
+from agent.gold_price import build_svg_chart, get_price as get_gold_price, load_history as load_gold_history
 from agent.manual_holdings import _fetch_navs_amfi, _fetch_nav_mfapi
 from agent.auth import (
     _save_tokens as _save_paytm_tokens,
@@ -770,8 +770,8 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 </div>
 {% endmacro %}
 
-<!-- ── Paytm · Zerodha · Diversification — 3-col side by side ─────────────────── -->
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+<!-- ── Paytm · Zerodha · Manual MF · Diversification ─────────────────────────── -->
+<div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
 
   <!-- Paytm Money -->
   {% for b in brokers if b.label == 'Paytm Money' %}
@@ -791,6 +791,47 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   </div>
   {% endfor %}
 
+  <!-- Manual MF corpus -->
+  {% if mf_summary %}
+  <div class="card overflow-hidden" id="card-mf-summary">
+    <div class="card-toggle p-4 border-b border-[#1e2d4a] flex justify-between items-center" onclick="toggleCard('mf-summary')">
+      <div class="flex items-center gap-2.5">
+        <div class="w-2.5 h-2.5 rounded-full bg-[#6366F1]"></div>
+        <div>
+          <div class="font-semibold text-white text-[14px]">Manual MF Corpus</div>
+          <div class="text-[11px] text-muted">Tracked separately · included in FIRE</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-right">
+          <div class="font-bold text-white text-[16px] tabular-nums money">₹{{ inr(mf_summary.current_value) }}</div>
+          <div class="text-[11px] {{ 'text-success' if mf_summary.pnl >= 0 else 'text-danger' }} tabular-nums">
+            {{ '+' if mf_summary.pnl >= 0 else '' }}{{ '{:.1f}'.format(mf_summary.pnl_pct) }}%
+          </div>
+        </div>
+        <span class="chevron material-symbols-outlined text-muted text-[18px]">expand_less</span>
+      </div>
+    </div>
+    <div id="card-body-mf-summary" class="p-4">
+      <div class="grid grid-cols-2 gap-3 text-[11px]">
+        <div>
+          <div class="text-muted uppercase tracking-wider mb-1">Invested</div>
+          <div class="font-semibold text-white money">₹{{ inr(mf_summary.invested) }}</div>
+        </div>
+        <div>
+          <div class="text-muted uppercase tracking-wider mb-1">P&amp;L</div>
+          <div class="font-semibold {{ 'text-success' if mf_summary.pnl >= 0 else 'text-danger' }} money">
+            {{ '+' if mf_summary.pnl >= 0 else '' }}₹{{ inr(mf_summary.pnl) }}
+          </div>
+        </div>
+      </div>
+      <div class="text-[11px] text-muted mt-3 leading-relaxed">
+        Not forced into target allocation until the fund-level asset split is explicitly tracked.
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Diversification -->
   {% if diversification %}
   <div class="card overflow-hidden" id="card-diversify">
@@ -799,7 +840,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
         <span class="material-symbols-outlined text-[#60a5fa] text-[17px]" style="font-variation-settings:'FILL' 1;">donut_small</span>
         <div>
           <div class="font-semibold text-white text-[14px]">Diversification</div>
-          <div class="text-[11px] text-muted">All portfolios · vs FIRE targets</div>
+          <div class="text-[11px] text-muted">Allocatable portfolio · CFO targets</div>
         </div>
       </div>
       <span class="chevron material-symbols-outlined text-muted text-[18px]">expand_less</span>
@@ -838,7 +879,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
           </div>
         </div>
         {% endfor %}
-        <div class="text-[9px] text-muted mt-1 opacity-60">Bar fills to target · white line = 100% of target</div>
+        <div class="text-[9px] text-muted mt-1 opacity-60">Manual MF is segregated until its asset split is tracked</div>
       </div>
     </div>
   </div>
@@ -915,7 +956,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     <div class="flex items-center gap-3">
       <div class="text-right">
         <div class="font-bold text-white text-[15px] tabular-nums money">₹{{ inr(gold.current_value) }}</div>
-        <div class="text-[11px] text-muted">IBJA <span class="money">₹{{ inr(gold.price_per_gram, 2) }}/g</span> · {{ '{:.4f}'.format(gold.grams) }}g</div>
+        <div class="text-[11px] text-muted">{{ gold.price_source }} <span class="money">₹{{ inr(gold.price_per_gram, 2) }}/g</span> · {{ '{:.4f}'.format(gold.grams) }}g</div>
       </div>
       <span class="chevron material-symbols-outlined text-muted text-[18px]">expand_less</span>
     </div>
@@ -1019,7 +1060,7 @@ function toggleCard(id) {
   const ctx = canvas.getContext('2d');
   const cx=80, cy=80, R=58, SW=15;
   const data  = {{ diversification | tojson }};
-  const total = {{ total_portfolio }};
+  const total = {{ diversification_total }};
 
   // Track
   ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI);
@@ -1046,7 +1087,7 @@ function toggleCard(id) {
   const s = total >= 1e7 ? '₹'+(total/1e7).toFixed(2)+'Cr' : '₹'+(total/1e5).toFixed(1)+'L';
   ctx.fillText(s, cx, cy-7);
   ctx.font='8px Inter,sans-serif'; ctx.fillStyle='#6B7FA3';
-  ctx.fillText('TOTAL', cx, cy+7);
+  ctx.fillText('ALLOC', cx, cy+7);
 })();
 </script>
 </body>
@@ -1206,8 +1247,8 @@ def _build_gold_context() -> dict | None:
     monthly_sip = float(g.get('monthly_sip', 0) or 0)
     sip_day    = g.get('sip_day', 1)
 
+    price_per_gram = get_gold_price() or 0
     history_30 = load_gold_history(days=30)
-    price_per_gram = history_30[-1]['price'] if history_30 else 0
     current_value  = grams * price_per_gram
     pnl            = current_value - invested
     pnl_pct        = (pnl / invested * 100) if invested > 0 else 0
@@ -1239,6 +1280,7 @@ def _build_gold_context() -> dict | None:
         'monthly_sip':   monthly_sip,
         'sip_day':       sip_day,
         'price_per_gram': price_per_gram,
+        'price_source':    'IBJA 24K live rate',
         'current_value': current_value,
         'pnl':           pnl,
         'pnl_pct':       pnl_pct,
@@ -1293,12 +1335,22 @@ def dashboard_main():
     mf_total        = sum(m['current_value'] for m in mf_funds)
     gold_total      = gold['current_value'] if gold else 0.0
     total_portfolio = broker_total + mf_total + gold_total
+    mf_invested     = sum(m['invested'] for m in mf_funds)
+    mf_summary      = None
+    if mf_total > 0:
+        mf_pnl = mf_total - mf_invested
+        mf_summary = {
+            'current_value': mf_total,
+            'invested':      mf_invested,
+            'pnl':           mf_pnl,
+            'pnl_pct':       (mf_pnl / mf_invested * 100) if mf_invested else 0.0,
+        }
+    diversification_total = broker_total + gold_total
 
     # Compute diversification across all portfolios vs FIRE targets
     _CAT_DEFS = {
         'Equity':         {'color': '#6366F1', 'target': 30.0},
         'Gold':           {'color': '#F59E0B', 'target': 10.0},
-        'Multi-Asset MF': {'color': '#10B981', 'target': 20.0},
         'Mid & Small Cap':{'color': '#c084fc', 'target': 20.0},
         'International':  {'color': '#60a5fa', 'target': 10.0},
         'Debt':           {'color': '#94a3b8', 'target': 25.0},
@@ -1333,14 +1385,12 @@ def dashboard_main():
         if cash > 100:
             _cat_add('Cash', cash, 'Cash', b['label'])
 
-    for mf in mf_funds:
-        _cat_add('Multi-Asset MF', mf['current_value'], mf['name'], 'ICICI')
     if gold:
         _cat_add('Gold', gold['current_value'], 'Paytm Gold', 'Paytm')
 
     diversification = []
     for name, cat in _cats.items():
-        pct    = cat['value'] / total_portfolio * 100 if total_portfolio > 0 else 0.0
+        pct    = cat['value'] / diversification_total * 100 if diversification_total > 0 else 0.0
         target = cat['target_pct']
         status = 'over' if pct > target + 2 else ('under' if pct < target - 2 else 'ok')
         diversification.append({
@@ -1353,7 +1403,9 @@ def dashboard_main():
     return render_template_string(
         _DASHBOARD_HTML, brokers=brokers, generated=generated,
         gold=gold, mf_funds=mf_funds, fire=fire,
-        total_portfolio=total_portfolio, diversification=diversification,
+        mf_summary=mf_summary, total_portfolio=total_portfolio,
+        diversification_total=diversification_total,
+        diversification=diversification,
     ), 200
 
 
