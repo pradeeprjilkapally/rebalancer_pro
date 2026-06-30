@@ -26,14 +26,11 @@ Out-of-scope: what NOT to touch, so it doesn't wander.
 -->
 --------------------------------------------------------------------------------------------------
 ==================================================================================================
-MORNING TO-DO — 2026-06-28  (pending; do these when fresh)
+MORNING TO-DO — 2026-06-28  (reviewed 2026-06-29)
 ==================================================================================================
 
-[1] Paytm re-auth — DO FIRST.
-    Why: tokens are ~37h stale; the hourly monitor keeps flagging it on Slack.
-    How: run `python -m agent.daily_review --broker paytm` (or wait for the 7:45 AM job)
-         → it posts a Paytm login link to Slack → tap it → log in → tokens auto-save.
-    Done when: `monitor` (or `python -m agent.sanity_check --report`) shows Tokens freshness OK.
+[1] Paytm re-auth — DONE 2026-06-29.
+    Verified: `python -m agent.sanity_check --report` shows Tokens freshness OK.
 
 [2] (optional) Fix local DNS so the Mac can resolve trycloudflare.
     Why: router 192.168.0.1 returns NXDOMAIN for *.trycloudflare.com (relay already robust to
@@ -47,6 +44,19 @@ MORNING TO-DO — 2026-06-28  (pending; do these when fresh)
 Reference (no action needed): dashboards are Access-only now (Google OTP, no app password);
 pmClient/apiService.py diverges from upstream (re-apply the ConnectionError fix if you ever
 re-sync from paytmmoney/pyPMClient). Full chore log lives in action_items.md.
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
+Date:         2026-06-29
+Status:       complete 2026-06-30 — live gold source, MF segregated (own card, out of allocatable diversification), ≥5×/day refresh path + 3×/day ping plist, manual-MF excluded from trims; suite 103 (reviewed + finished from Codex's session)
+Task:         01-290626
+Goal:         Fix dashboard data correctness: broker snapshots must refresh at least 5 times/day, Paytm Gold must use the existing live-market gold source consistently, and MF allocation treatment must be corrected.
+Constraints:  Do not alter broker SDK code. Do not invent portfolio values; trace displayed numbers to persisted JSON/manual holdings/code paths. Keep secrets out of output. Reuse current launchd/Slack setup: dashboard pings stay separate from heavy review suggestions. Notifications must not block the scheduled flow.
+Inputs:       Screenshots of /dashboard_main and Paytm app, mydata dashboard JSON/manual holdings, agent/dashboard_ping.py, agent/webhook.py, agent/portfolio.py, agent/daily_review.py, launchd setup.
+Outputs:      A lightweight broker snapshot refresh path used by schedules at least 5 times/day; dashboard_ping reads encrypted refreshed snapshots; Paytm Gold valuation uses the chosen existing live-market source rather than stale/manual price; diversification/FIRE logic treats ICICI Multi-Asset MF correctly instead of double-counting or forcing an arbitrary bucket.
+Done-check:   Dashboard stock values refresh from Paytm/Zerodha without waiting days; Paytm Gold value is calculated from the selected live source; MF current value is included in corpus, and allocation buckets/targets sum coherently; tests or verification script prove the aggregation math.
+Out-of-scope: Visual redesign, trade execution, changing real holdings manually without confirmation.
+
 --------------------------------------------------------------------------------------------------
 --------------------------------------------------------------------------------------------------
 

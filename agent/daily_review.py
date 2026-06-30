@@ -187,7 +187,7 @@ def _format_summary(broker: str, snapshot: dict, rebalance: list, fire: dict, fi
 # Paytm Money review
 # ---------------------------------------------------------------------------
 
-def run_paytm():
+def run_paytm(send_slack: bool = True):
     from pmClient.pmClient import PMClient
     from agent.auth import setup_session
     from agent.portfolio import build_snapshot
@@ -225,14 +225,15 @@ def run_paytm():
     print(f"\n  FIRE: {fire_data['progress_pct']:.1f}% — ~{fire_data['years_to_fire']:.1f} yrs to go")
 
     _write_file('paytm', snapshot, rebalance, fire_data, fire_sugg)
-    notify(_format_summary('paytm', snapshot, rebalance, fire_data, fire_sugg))
+    if send_slack:
+        notify(_format_summary('paytm', snapshot, rebalance, fire_data, fire_sugg))
 
 
 # ---------------------------------------------------------------------------
 # Zerodha review
 # ---------------------------------------------------------------------------
 
-def run_zerodha():
+def run_zerodha(send_slack: bool = True):
     from agent.brokers.zerodha import get_kite_client, fetch_all as zerodha_fetch_all
     from agent.portfolio import build_snapshot
     from pmClient.pmClient import PMClient
@@ -299,7 +300,8 @@ def run_zerodha():
     print(f"\n  FIRE: {fire_data['progress_pct']:.1f}% — ~{fire_data['years_to_fire']:.1f} yrs to go")
 
     _write_file('zerodha', snapshot, rebalance, fire_data, fire_sugg)
-    notify(_format_summary('zerodha', snapshot, rebalance, fire_data, fire_sugg))
+    if send_slack:
+        notify(_format_summary('zerodha', snapshot, rebalance, fire_data, fire_sugg))
 
 
 # ---------------------------------------------------------------------------
@@ -309,14 +311,16 @@ def run_zerodha():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--broker', choices=['paytm', 'zerodha'], default='paytm')
+    parser.add_argument('--no-notify', action='store_true',
+                        help='Refresh dashboard data without sending the review summary to Slack.')
     args = parser.parse_args()
 
     print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] {args.broker.title()} review starting...")
 
     if args.broker == 'paytm':
-        run_paytm()
+        run_paytm(send_slack=not args.no_notify)
     else:
-        run_zerodha()
+        run_zerodha(send_slack=not args.no_notify)
 
     print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] {args.broker.title()} review complete.")
 

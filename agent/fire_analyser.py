@@ -63,18 +63,36 @@ def fire_aligned_suggestions(
     Both are included in the total corpus denominator so allocation percentages
     reflect the full portfolio, not just broker equity.
     """
-    broker_total = snapshot['total_portfolio']
-    total = broker_total + manual_mf + manual_gold
+    holdings = snapshot.get('holdings', [])
+    snapshot_manual_mf = sum(
+        h['current_value'] for h in holdings
+        if h.get('source') == 'manual_mf'
+    )
+    snapshot_manual_gold = sum(
+        h['current_value'] for h in holdings
+        if h.get('source') == 'manual_gold'
+    )
+    external_manual_mf = 0.0 if snapshot_manual_mf else manual_mf
+    external_manual_gold = 0.0 if snapshot_manual_gold else manual_gold
+
+    total = snapshot['total_portfolio'] + external_manual_mf + external_manual_gold
     if total <= 0:
         return []
 
     # Broker gold (Gold Bees ETF in equity holdings)
-    broker_gold  = sum(h['current_value'] for h in snapshot['holdings']
-                       if any(k in h['name'].upper() for k in ('GOLD', 'BEES')))
-    total_gold   = broker_gold + manual_gold
+    broker_gold = sum(
+        h['current_value'] for h in holdings
+        if h.get('source') not in ('manual_gold', 'manual_mf')
+        and any(k in h['name'].upper() for k in ('GOLD', 'BEES'))
+    )
+    total_gold = broker_gold + snapshot_manual_gold + external_manual_gold
 
     # Broker pure equity (exclude Gold Bees)
-    broker_equity = snapshot['total_equity'] - broker_gold
+    broker_equity = sum(
+        h['current_value'] for h in holdings
+        if h.get('source') not in ('manual_gold', 'manual_mf')
+        and not any(k in h['name'].upper() for k in ('GOLD', 'BEES'))
+    )
 
     # ICICI Multi-Asset is counted in the total but not in any single category bucket;
     # it already provides internal equity/debt/gold diversification.

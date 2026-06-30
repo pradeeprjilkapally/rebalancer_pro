@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.pradeep.dashboard-ping</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/anaconda3/bin/python3</string>
+        <string>-m</string>
+        <string>agent.dashboard_ping</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/pradeepreddyjilkapally/Documents/Pradeep/claude_repo/pyPMClient</string>
+
+    <!-- 7:50 AM, 12:00 PM, 3:00 PM IST. Each run refreshes Paytm/Zerodha snapshots before Slack. -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict>
+            <key>Hour</key>
+            <integer>7</integer>
+            <key>Minute</key>
+            <integer>50</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>12</integer>
+            <key>Minute</key>
+            <integer>0</integer>
+        </dict>
+        <dict>
+            <key>Hour</key>
+            <integer>15</integer>
+            <key>Minute</key>
+            <integer>0</integer>
+        </dict>
+    </array>
+
+    <key>StandardOutPath</key>
+    <string>/Users/pradeepreddyjilkapally/Library/Logs/rebalancer/dashboard_ping.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/pradeepreddyjilkapally/Library/Logs/rebalancer/dashboard_ping_error.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/anaconda3/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>HOME</key>
+        <string>/Users/pradeepreddyjilkapally</string>
+    </dict>
+</dict>
+</plist>

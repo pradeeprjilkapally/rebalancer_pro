@@ -55,6 +55,8 @@ def analyse(snapshot: dict) -> List[dict]:
         return suggestions
 
     for h in snapshot['holdings']:
+        if h.get('source') == 'manual_mf':
+            continue
         if h['allocation_pct'] > CONCENTRATION_LIMIT and h['ltp'] > 0:
             target_value = total * (TRIM_TARGET_PCT / 100)
             excess_value = h['current_value'] - target_value
