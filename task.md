@@ -47,6 +47,19 @@ re-sync from paytmmoney/pyPMClient). Full chore log lives in action_items.md.
 --------------------------------------------------------------------------------------------------
 --------------------------------------------------------------------------------------------------
 
+Date:         2026-06-30
+Status:       complete 2026-06-30 — token monitor + handoff/resume baton built & tested (suite 116); also re-lands the PR#15 tail orphaned by an early merge
+Task:         02-300626
+Goal:         Claude↔Codex handoff loop: a background monitor estimates Claude's rolling-5h usage and, near the limit, hands the active task to Codex (HANDOFF.md + Slack); when Claude refreshes it hands back (Codex is free-tier, minimise its use). Track everything; test it.
+Constraints:  Measurement must run OUTSIDE the Claude session (its own launchd job) so it survives the limit and spends no Claude tokens. The % is an estimate (Anthropic exposes no live plan-% for subscriptions) — count input+output+cache_creation from ~/.claude session logs vs a calibratable ceiling; be explicit it's an estimate. Mirror skills into both .claude/skills and .agents/skills. No secrets logged.
+Inputs:       ~/.claude/projects/**/*.jsonl (per-turn usage), agent/notify.py, the cross-agent parity from PR#15.
+Outputs:      agent/token_monitor.py (parse/rolling/decide/baton, --report); HANDOFF.md baton (gitignored); handoff+resume skills in both skill dirs; com.pradeep.token-monitor.plist (10-min); CLAUDE_5H_TOKEN_BUDGET + docs in CLAUDE.md/AGENTS.md/.env.example; tests (decide state machine, rolling window, parse, baton) — suite 116.
+Done-check:   suite 116 green; `--report` prints rolling usage from real logs; decide() transitions handoff/handback/none correctly; baton written with owner+branch.
+Out-of-scope: Self-measuring token% inside the live session (impossible); querying Codex's quota (separate, free-tier); auto-resume across a hard limit (platform-paused — baton picked up on return).
+
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
 Date:         2026-06-29
 Status:       complete 2026-06-30 — live gold source, MF segregated (own card, out of allocatable diversification), ≥5×/day refresh path + 3×/day ping plist, manual-MF excluded from trims; suite 103 (reviewed + finished from Codex's session)
 Task:         01-290626

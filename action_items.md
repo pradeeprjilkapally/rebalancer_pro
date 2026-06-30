@@ -17,6 +17,7 @@ Functional feature work lives in `task.md`.
 
 | Filed | Target | Item | Owner | Notes |
 |-------|--------|------|-------|-------|
+| 2026-06-30 | — | [sanity] Auth sentinels | Claude | Auth still pending: Paytm Money (sentinel 0h old), Zerodha (sentinel 0h old) |
 | 2026-06-24 | dropped 2026-06-25 | ~~Enable branch protection on master~~ | Pradeep | Not available — private repo on a non-paid plan (branch protection/rulesets need GitHub Pro/Team for private repos). Mitigated by the pre-push hook + green CI; merges already go via PRs. |
 | 2026-06-25 | — | (optional) Local DNS can't resolve trycloudflare | Pradeep | Router `192.168.0.1` returns NXDOMAIN for `*.trycloudflare.com` (1.1.1.1/8.8.8.8 resolve fine). PR #7 makes the relay robust to this, but the sanity check's direct-tunnel probe still can't see it. Optional: set the Mac's DNS to 1.1.1.1/8.8.8.8 (System Settings → Network → DNS) or fix router DNS-rebind settings. |
 | 2026-06-23 | 2026-07-01 | Update gold grams + invested after next SIP | Pradeep | On July 1st SIP: open Paytm → Gold → note new grams total and new invested total → update `mydata/manual_holdings.json` grams + invested |

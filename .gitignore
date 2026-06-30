@@ -30,3 +30,9 @@ __pycache__/
 # Sanity-check auto-fix cooldown stamp
 .sanity_autofix_cooldown
 .sanity_alert_state
+
+# Claude<->Codex handoff baton (local, transient)
+HANDOFF.md
+.token_monitor_state
+.zerodha_auth_pending
+agent/brokers/.zerodha_auth_pending

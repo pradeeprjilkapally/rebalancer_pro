@@ -55,6 +55,7 @@ All loaded from `.env` via `python-dotenv`. Copy `.env.example` to `.env` on a f
 | `ZERODHA_API_SECRET` | `brokers/zerodha.py` | Zerodha Kite API secret |
 | `SLACK_WEBHOOK_URL` | `notify.py` | Slack incoming webhook for all proactive notifications |
 | `SLACK_USER_ID` | `notify.py` | Your Slack member ID — @-tags you on token/auth alerts; falls back to `<!channel>` if unset |
+| `CLAUDE_5H_TOKEN_BUDGET` | `token_monitor.py` | Estimated 5h token ceiling for the Claude↔Codex handoff trigger (default 5,000,000). **Calibrate** to the rolling count at which you see Claude Code's "approaching limit" warning. |
 | `WEBHOOK_PORT` | `webhook.py` | Flask port (default `5001`) |
 | `WEBHOOK_ENCRYPTION_KEY` | `crypto.py` | Fernet key for token encryption |
 | `CLOUDFLARE_API_TOKEN` | `tunnel_manager.py` | Cloudflare API token for tunnel |
@@ -72,6 +73,7 @@ All loaded from `.env` via `python-dotenv`. Copy `.env.example` to `.env` on a f
 | Zerodha daily review | 8:00 AM IST | 02:30 UTC | `python -m agent.daily_review --broker zerodha` | Zerodha tokens reset ~3:30 AM; headless auth link posted to Slack |
 | Dashboard ping + refresh | 7:50 AM, 12:00 PM, 3:00 PM IST | — | `python -m agent.dashboard_ping` | Refreshes Paytm/Zerodha encrypted dashboard snapshots, then posts compact Slack link |
 | Hourly health check | every hour | — | `python -m agent.sanity_check` | Auto-fixes infra/code failures via `claude -p`, **auto-merges to master after a green test suite**, posts the merged PR to Slack. 6h cooldown. Read-only status: `--report`. |
+| Token handoff monitor | every 10 min | — | `python -m agent.token_monitor` | Estimates rolling-5h Claude usage from the session logs; at ≥88% hands the active task to Codex (HANDOFF.md + Slack), hands back when Claude refreshes. `--report` for read-only status. The % is an **estimate** — calibrate `CLAUDE_5H_TOKEN_BUDGET`. |
 
 Scheduled via macOS **launchd** (`~/Library/LaunchAgents/`). Wrap each command in `try/except`; prefix logs with `[cron]`.
 
