@@ -47,6 +47,40 @@ re-sync from paytmmoney/pyPMClient). Full chore log lives in action_items.md.
 --------------------------------------------------------------------------------------------------
 --------------------------------------------------------------------------------------------------
 
+Date:         2026-07-01
+Status:       complete 2026-07-01 — task.md now the total ledger; pre-push guard (check_task_tracked) enforces branch→task mapping; conventions rewritten; history backfilled; suite +6 guard tests
+Task:         01-010726
+Goal:         Make task.md the single ledger for EVERY repo change (code/config/infra) and every agent/user recommendation, with precise factual context; restrict action_items.md to only tasks the agent genuinely cannot do; enforce it with a guard; backfill the untracked history.
+Constraints:  Precise, low-temperature context in every entry (no fluff, no invented values). Rigorous tests per task — no loopholes. task.md holds ALL trackable work; action_items.md ONLY explicit manual-only items (broker login, domain purchase, secret entry). A feature branch must map to a documented task before it can be pushed. Do not weaken the existing pre-push test gate.
+Inputs:       CLAUDE.md/AGENTS.md working-conventions, scripts/hooks/pre-push, git history (untracked feat-/fix- commits), task.md.
+Outputs:      scripts/check_task_tracked.py (branch→task.md guard) wired into pre-push; CLAUDE.md/AGENTS.md convention rewritten (task.md = everything; action_items = explicit manual-only; rigorous tests; entry-at-start); backfilled complete-status task.md entries for shipped-but-untracked features (Slack migration, CI alerts, cross-agent parity, tunnel fixes); tests for the guard.
+Done-check:   check_task_tracked passes for a branch with a documented task and fails for one without; suite green incl. new guard tests; pre-push runs the guard; backfilled entries present; conventions updated in both CLAUDE.md and AGENTS.md.
+Out-of-scope: Rewriting historical commits; changing the branch→PR→merge flow; auto-generating task entries without precise context.
+
+--------------------------------------------------------------------------------------------------
+BACKFILL — shipped work that predated the tracking rule (documented retroactively by 01-010726)
+--------------------------------------------------------------------------------------------------
+
+These features shipped with `feat-`/`fix-` commit slugs and no task.md entry at the
+time. Recorded here for a complete ledger (all complete; SHAs + tests are facts):
+
+- Slack migration (PR #6, `867a5dd`) — replaced Twilio/WhatsApp with a Slack incoming
+  webhook; `notify()` returns True only on HTTP 200 + body `ok` (real delivery, not
+  "queued"). Removed all Twilio code/config. Tests: agent notify + webhook suite.
+- CI-failure alerts (`a11961a` → Slack in `bf86f57`) — GitHub Action `notify` job posts
+  to Slack (via `SLACK_WEBHOOK_URL` secret) on red master CI; `check_ci` daily backstop.
+- Deterministic CI + cross-platform runners (`29028b6`, `5b3237c`) — `pytest -m "not live"`,
+  conftest network-block, ubuntu+windows matrix; fixed apiService 405 crash (2-arg
+  httpx.HTTPError → ConnectionError).
+- Tunnel/relay reliability — `2b25391` (PR #7: publish to KV via ha_connections + local
+  origin, not a trycloudflare probe) and `ad121f4` (PR #8: URL regex excludes api/update/
+  www infra hosts). Fixed recurring relay 530/404.
+- Cross-agent parity (`c841ebe`, landed via PR #16) — AGENTS.md ≡ CLAUDE.md; `.claude/skills`
+  and `.agents/skills` hold the identical set; documented the keep-in-sync convention.
+
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
 Date:         2026-06-30
 Status:       complete 2026-06-30 — token monitor + handoff/resume baton built & tested (suite 116); also re-lands the PR#15 tail orphaned by an early merge
 Task:         02-300626

@@ -109,14 +109,37 @@ Every task delivery ends with: **verified / not-verified / known-issues** stated
 
 ## Working conventions
 
-**Task intake (`jarvis`)** — Pradeep files feature/fix requests in `task.md` (repo root) using the template fields (Date, Goal, Constraints, Inputs, Outputs, Done-check, Out-of-scope), then types `jarvis`. On that trigger, read `task.md` and start the task without further prompting.
-- Lifecycle: completed task → comment out the section with `Status: complete <date> — <result>`, append a fresh blank template below the separator. Parked task → `Status: pending — parked <date>`, stays visible, fresh template added below.
+**Task tracking is mandatory and total.** `task.md` is the single ledger for
+**every change to this repo — code, config, or infra — and every piece of work
+either Pradeep or an agent (Claude/Codex) recommends.** No exceptions: a Slack
+migration, a one-line fix, a launchd tweak, a doc edit — each gets a `task.md`
+entry **before the work starts**, not at commit time.
+- **Precise, low-temperature context.** Entries state facts, not fluff: real
+  file names, real values traced to source, the actual Done-check. No invented
+  numbers, no vague goals.
+- **Rigorous tests per task, no loopholes.** Every task's Done-check names a
+  concrete test/verification; edge cases are covered, not just the happy path.
+- **Self-initiated work counts.** When work starts mid-conversation (not via a
+  filed request), still open the `task.md` entry first — this is the gap the
+  guard below closes.
+- Template fields: Date, Status, Task, Goal, Constraints, Inputs, Outputs,
+  Done-check, Out-of-scope. Task numbering: `<NN>-<DDMMYY>`, `NN` resets to `01`
+  the first task each new day.
+- Lifecycle: complete → `Status: complete <date> — <result>` (kept visible or
+  commented per the template); parked → `Status: pending — parked <date>`.
 - At the start of each session, show the current `task.md` state for review.
-- Task numbering: `<NN>-<DDMMYY>` — `NN` resets to `01` for the first task each new day.
 
-**Action items (`ledger`)** — Non-functional / process work (config steps, pushes, deferred items, tooling) goes in `action_items.md` (not `task.md`). Typing `ledger` reads the file, shows the Open items, and acts on / updates whatever Pradeep points to.
-- After finishing any task, append leftover follow-ups (pending push, config step, deferred sub-item) to `action_items.md` automatically.
-- When Pradeep types `exit`, ask whether to review the open action items before closing; on "yes", list them.
+**Enforced at push time.** `scripts/check_task_tracked.py` (wired into the
+pre-push hook) blocks a push whose branch doesn't map to a documented `task.md`
+task id (`feature/<NN-DDMMYY>-<slug>` → a real `Task: <id>` entry). Fix by adding
+the entry; `git push --no-verify` overrides only in a genuine emergency.
+
+**`action_items.md` — explicit manual-only residue.** ONLY tasks an agent
+**genuinely cannot do in any case** go here: a broker login Pradeep must tap, a
+domain he must purchase, a secret he must enter, a dashboard setting only he can
+change. Everything an agent *can* do — including config and infra edits — is a
+`task.md` task, not an action item. Typing `ledger` shows the open items; `jarvis`
+runs the active `task.md` task.
 
 **Push** — never push automatically. Always add a push item to `action_items.md` and remind Pradeep to run `git push rebalancer master`.
 

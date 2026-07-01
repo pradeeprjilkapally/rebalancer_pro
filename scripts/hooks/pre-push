@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# Pre-push gate: run the deterministic test suite before every push.
-# A failure blocks the push so red code never reaches the remote (and CI).
+# Pre-push gate: (1) the branch must map to a documented task in task.md, and
+# (2) the deterministic test suite must pass. Either failure blocks the push, so
+# untracked or red code never reaches the remote (and CI).
 #
 # Install:  cp scripts/hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
 # Override (rare):  git push --no-verify
@@ -9,6 +10,15 @@
 set -euo pipefail
 
 repo="$(git rev-parse --show-toplevel)"
+
+# Gate 1: task tracking — every change (code/config/infra) is documented in task.md.
+echo "[pre-push] checking task tracking..."
+if ! python3 "$repo/scripts/check_task_tracked.py"; then
+    echo "[pre-push]    Fix by adding the task.md entry, or override with: git push --no-verify"
+    exit 1
+fi
+
+# Gate 2: deterministic test suite.
 echo "[pre-push] running deterministic tests (pytest -m 'not live')..."
 
 cd "$repo/tests"
