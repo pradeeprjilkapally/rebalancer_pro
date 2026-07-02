@@ -7,6 +7,18 @@ rebalancing via CLI.
 
 Push target: **always `git push rebalancer master`** — never push to `origin` (upstream paytmmoney/pyPMClient).
 
+## Deploy pipeline
+`feature/<taskID-goal>` → `develop` → `master`. A merge only goes **live** via
+`scripts/deploy.py` (the `deploy` skill) — restarting the persistent webhook, not just
+merging (the gap that caused stale data):
+- `python scripts/deploy.py dev` — preview `develop` on a second webhook at
+  `127.0.0.1:5002` (a `develop` git worktree) → **`dashboard_pp`**, **local-only** (the
+  tunnel targets :5001; `/dashboard_pp` 404s any request carrying Cloudflare headers).
+- `python scripts/deploy.py prod` — pull `master`, restart the production webhook
+  (`:5001`), refresh snapshots, verify **`dashboard_main`** (public via relay+Access).
+Flow per task: merge feature→develop → `deploy dev` → Pradeep reviews `dashboard_pp` →
+merge develop→master → `deploy prod`.
+
 ---
 
 ## How to run

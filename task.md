@@ -58,6 +58,46 @@ Done-check:   check_task_tracked passes for a branch with a documented task and 
 Out-of-scope: Rewriting historical commits; changing the branch→PR→merge flow; auto-generating task entries without precise context.
 
 --------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
+Date:         2026-07-01
+Status:       complete 2026-07-02 — deploy pipeline: /dashboard_pp (local-only preview) + scripts/deploy.py (dev/prod) + deploy skill (both dirs) + docs; suite 127
+Task:         02-010726
+Goal:         Add a staged deploy pipeline so "merged" reliably becomes "live" (the gap that caused stale data): feature/<taskID-goal> → develop → master, with develop previewed on a LOCAL-ONLY dashboard_pp (:5002 worktree) before promoting to the public dashboard_main (:5001, master).
+Constraints:  App-specific (rebalancer_pro only). dashboard_pp must be local-only — served by a second webhook on 127.0.0.1:5002 from a `develop` git worktree, which the tunnel never exposes (no relay/Access change). Production (:5001, master, dashboard_main via relay) is unchanged. Preview shares .env/tokens/mydata with prod via symlink (reviewing code, not data). Rigorous tests. Track per the new rule.
+Inputs:       agent/webhook.py (/dashboard_bkp route), agent/tunnel_manager.py (exposes :5001 only), launchd, git worktree.
+Outputs:      rename /dashboard_bkp → /dashboard_pp; scripts/deploy.py (deploy dev → refresh :5002 develop worktree; deploy prod → pull master + restart :5001 + refresh); deploy skill in both skill dirs; CLAUDE.md/AGENTS.md document the pipeline; tests for deploy helpers + the route rename.
+Done-check:   `deploy prod` pulls+restarts :5001 and dashboard_main serves 200; `deploy dev` starts :5002 from the develop worktree and dashboard_pp serves 200 locally only (not via relay); suite green; route renamed.
+Out-of-scope: Editing the Cloudflare Worker/relay; CI-based deploys; multi-machine. (Bootstrapping: this first task ships via a direct PR; future tasks follow feature→develop→master.)
+
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
+Date:         2026-07-02
+Status:       pending — parked 2026-07-02 (Pradeep will take up later today)
+Task:         03-020726
+Goal:         Python model-router so the workflow can switch models per phase — Opus for planning, Sonnet for building, Haiku for test execution — invoked when needed.
+Constraints:  Realistic mechanism: orchestrate via Claude Code sub-agents (Agent tool `model` override) or the Anthropic SDK for a standalone router; document the cold-start/context trade-off; keep rigorous test DESIGN on Sonnet/Opus (Haiku executes, doesn't author edge cases). App-agnostic helper, no secrets logged.
+Inputs:       the Agent tool model override, Anthropic SDK, this repo's task flow.
+Outputs:      TBD when picked up — a `scripts/model_router.py` and/or a documented sub-agent convention.
+Done-check:   TBD.
+Out-of-scope: TBD.
+(Note: logged in task.md per the convention — it's agent-doable, so not action_items. Flag if you'd rather it in action_items.)
+
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
+Date:         2026-07-02
+Status:       pending — parked 2026-07-02 (recommended by Claude)
+Task:         04-020726
+Goal:         Harden the sanity-check token-freshness check to validate REAL broker session validity, not just the token file's mtime — it reported "OK" while the Paytm session was actually expired.
+Constraints:  A cheap validity probe (a lightweight authed call) without burning rate limits; fail-open on network blips; no secrets logged. Rigorous tests.
+Inputs:       agent/sanity_check.py (check_tokens), agent/auth.py, agent/brokers/zerodha.py.
+Outputs:      TBD — a validity check replacing/augmenting the mtime heuristic.
+Done-check:   TBD — check flags an expired session even when the token file is recent.
+Out-of-scope: TBD.
+
+--------------------------------------------------------------------------------------------------
 BACKFILL — shipped work that predated the tracking rule (documented retroactively by 01-010726)
 --------------------------------------------------------------------------------------------------
 
