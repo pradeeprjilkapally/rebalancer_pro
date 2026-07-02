@@ -1,0 +1,15 @@
+name: PR flow
+
+# Enforce the deploy model on every PR: feature/* → develop → master.
+# A feature branch cannot be merged straight to master.
+on:
+  pull_request:
+    types: [opened, reopened, edited, synchronize]
+
+jobs:
+  branch-flow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enforce feature → develop → master
+        run: python scripts/check_pr_flow.py "${{ github.head_ref }}" "${{ github.base_ref }}"
