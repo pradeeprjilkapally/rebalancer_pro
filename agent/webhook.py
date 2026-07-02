@@ -1270,7 +1270,7 @@ def _build_mf_context() -> list[dict]:
 
 def _build_chit_context() -> list[dict]:
     """Read manual_holdings.json chit entries → list for the template.
-    invested = explicit, else monthly_sip × months_paid; value = explicit, else invested."""
+    Valuation (months_paid from Start_Month, invested, current_value) via chit_valuation."""
     manual_file = os.path.join(_MYDATA, 'manual_holdings.json')
     if not os.path.exists(manual_file):
         return []
@@ -1279,19 +1279,18 @@ def _build_chit_context() -> list[dict]:
     except Exception:
         return []
 
+    from agent.manual_holdings import chit_valuation
     result = []
     for c in manual.get('chits', []):
-        monthly     = float(c.get('monthly_sip', 0) or 0)
-        months_paid = int(c.get('months_paid', 0) or 0)
-        invested      = float(c.get('invested', 0) or 0) or (monthly * months_paid)
-        current_value = float(c.get('current_value', 0) or 0) or invested
+        v = chit_valuation(c)
+        invested, current_value = v['invested'], v['current_value']
         pnl = current_value - invested
         result.append({
             'name':          c.get('platform', 'Chit Fund'),
             'chit_value':    float(c.get('chit_value', 0) or 0),
-            'tenure_months': int(c.get('tenure_months', 0) or 0),
-            'monthly_sip':   monthly,
-            'months_paid':   months_paid,
+            'tenure_months': v['tenure'],
+            'monthly_sip':   v['monthly'],
+            'months_paid':   v['months_paid'],
             'invested':      invested,
             'current_value': current_value,
             'pnl':           pnl,
