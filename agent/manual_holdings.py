@@ -10,6 +10,7 @@ Gold price: live from IBJA via agent.gold_price (₹/gram)
 Returns holdings in the same dict shape used by portfolio.py so they merge
 seamlessly into the snapshot.
 """
+import calendar
 import json
 import os
 from datetime import datetime
@@ -103,7 +104,20 @@ def chit_valuation(chit: dict, now: datetime | None = None) -> dict:
         start = chit.get('Start_Month') or chit.get('start_month')
         try:
             sd = datetime.strptime(str(start).strip(), '%B-%Y')
-            months_paid = max(0, (now.year - sd.year) * 12 + (now.month - sd.month))
+            diff = (now.year - sd.year) * 12 + (now.month - sd.month)
+            if diff < 0:                              # chit starts in the future
+                months_paid = 0
+            else:
+                # The first installment is due IN Start_Month, so count the current
+                # month once its due day has arrived (installments-due ≈ paid, for an
+                # on-time payer). sip_day: an int day, or "last day of month".
+                dim = calendar.monthrange(now.year, now.month)[1]
+                sip_day = chit.get('sip_day')
+                if isinstance(sip_day, (int, float)) or (isinstance(sip_day, str) and sip_day.strip().isdigit()):
+                    due_day = min(int(sip_day), dim)   # day-31 in a 30-day month → the 30th
+                else:                                  # "last day of month" / unspecified
+                    due_day = dim
+                months_paid = diff + (1 if now.day >= due_day else 0)
         except (ValueError, TypeError, AttributeError):
             months_paid = 0
     months_paid = int(months_paid)
