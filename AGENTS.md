@@ -23,6 +23,14 @@ merge develop→master → `deploy prod`.
 PR that skips the flow — `feature/*` must target `develop`, `develop` targets `master`.
 A feature branch cannot merge straight to master.
 
+**No follow-up pushes to a merged PR.** Once a PR is opened, get it right in one push
+and only say "final — safe to merge" when the last commit is up and CI is green; in an
+authorised flow, merge it yourself immediately to close the race. If a fix is needed
+*after* a PR merged, it is a **new branch off develop**, never a push to the old branch —
+that push would orphan the commit (it never reaches develop/master). Enforced by the
+pre-push guard `scripts/check_branch_not_merged.py` (gate 0): it blocks a push to any
+branch whose PR is already merged.
+
 ---
 
 ## How to run

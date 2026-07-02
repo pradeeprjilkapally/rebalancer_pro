@@ -11,6 +11,13 @@ set -euo pipefail
 
 repo="$(git rev-parse --show-toplevel)"
 
+# Gate 0: don't push to a branch whose PR is already merged (that orphans the commit).
+echo "[pre-push] checking the branch's PR isn't already merged..."
+if ! python3 "$repo/scripts/check_branch_not_merged.py"; then
+    echo "[pre-push]    Branch fresh off develop, or override with: git push --no-verify"
+    exit 1
+fi
+
 # Gate 1: task tracking — every change (code/config/infra) is documented in task.md.
 echo "[pre-push] checking task tracking..."
 if ! python3 "$repo/scripts/check_task_tracked.py"; then
