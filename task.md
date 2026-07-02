@@ -48,6 +48,19 @@ re-sync from paytmmoney/pyPMClient). Full chore log lives in action_items.md.
 --------------------------------------------------------------------------------------------------
 
 Date:         2026-07-02
+Status:       complete 2026-07-02 — fix merge-guard gh query to target the fork (--repo); it was hitting origin/upstream → never fired. Shipping-proof: blocks feature/07 (merged PR #24), allows unmerged; suite +1
+Task:         09-020726
+Goal:         Fix the merge-guard (08-020726): its `gh pr list` omitted --repo, so it queried origin (upstream paytmmoney) instead of the fork and never found merged PRs → never blocked. Caught by shipping proof.
+Constraints:  Use GH_REPO (default pradeeprjilkapally/rebalancer_pro), matching sanity_check. Keep fail-open on gh unavailable. Regression test that the gh command carries --repo <fork>. feature→develop→master.
+Inputs:       scripts/check_branch_not_merged.py.
+Outputs:      --repo _GH_REPO added to the gh query; regression test test_gh_query_targets_the_fork; shipping proof recorded (blocks merged-PR branch, exit 1).
+Done-check:   guard exits 1 on a branch with a merged PR (live: feature/07-020726-chit-value → PR #24) and 0 otherwise; suite green.
+Out-of-scope: Anything beyond the --repo fix.
+
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
+Date:         2026-07-02
 Status:       complete 2026-07-02 — pre-push merge-guard blocks pushing to a merged-PR branch (stops the 4×-recurring orphaned-commit bug); discipline documented; suite +4
 Task:         08-020726
 Goal:         Stop the recurring bug where a follow-up commit is orphaned because its PR merged at an earlier commit — happened 4×. Block, at push time, any push to a branch whose PR is already merged; document the "no follow-up pushes to a merged PR" discipline.
