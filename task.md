@@ -60,6 +60,19 @@ Out-of-scope: Full chit valuation model (dividend/discount/drawn schedule) — a
 --------------------------------------------------------------------------------------------------
 --------------------------------------------------------------------------------------------------
 
+Date:         2026-07-02
+Status:       complete 2026-07-02 — CI pr-flow guard blocks feature→master; feature/*→develop, develop→master; suite +6 tests
+Task:         05-020726
+Goal:         Enforce the deploy model's branch flow so a feature branch physically cannot merge straight to master — feature/* → develop → master — after Claude repeatedly PR'd feature→master.
+Constraints:  GitHub-side enforcement (a CI check on pull_request that can't be bypassed locally). Pure, unit-tested flow logic. Don't block release/* or unknown patterns. This task itself follows the model: feature → develop → master.
+Inputs:       .github/workflows/, the deploy-model convention in CLAUDE.md/AGENTS.md.
+Outputs:      scripts/check_pr_flow.py (feature/*→develop, develop→master; else allowed) + .github/workflows/pr-flow.yml (runs it on PRs); tests; CLAUDE.md/AGENTS.md document the enforced flow.
+Done-check:   check_pr_flow blocks feature→master (exit 1) and passes feature→develop / develop→master; suite green; workflow runs on pull_request.
+Out-of-scope: Branch protection rules (not available on this plan); auto-merging; changing the deploy scripts.
+
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
 Date:         2026-07-01
 Status:       complete 2026-07-01 — task.md now the total ledger; pre-push guard (check_task_tracked) enforces branch→task mapping; conventions rewritten; history backfilled; suite +6 guard tests
 Task:         01-010726

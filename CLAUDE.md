@@ -19,6 +19,10 @@ merging (the gap that caused stale data):
 Flow per task: merge feature→develop → `deploy dev` → Pradeep reviews `dashboard_pp` →
 merge develop→master → `deploy prod`.
 
+**Enforced:** `.github/workflows/pr-flow.yml` (via `scripts/check_pr_flow.py`) fails any
+PR that skips the flow — `feature/*` must target `develop`, `develop` targets `master`.
+A feature branch cannot merge straight to master.
+
 ---
 
 ## How to run
