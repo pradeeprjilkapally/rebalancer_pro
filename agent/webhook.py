@@ -1867,18 +1867,25 @@ const obs=new IntersectionObserver(entries=>{
 
 
 # ---------------------------------------------------------------------------
-# Route: saved reference layout (/dashboard_bkp)
-# Serves the static premium-layout snapshot kept in demo/my_portfolio.html
+# Route: preview dashboard (/dashboard_pp) — LOCAL ONLY.
+# The SAME live dashboard as /dashboard_main, but served for reviewing develop
+# before promotion. In the deploy pipeline the preview webhook (:5002, develop
+# worktree) serves this. Any request arriving via the Cloudflare tunnel/relay
+# (which sets Cf-Connecting-Ip) is rejected, so dashboard_pp is never public on
+# either instance.
 # ---------------------------------------------------------------------------
 
-@app.route('/dashboard_bkp', methods=['GET'])
-def dashboard_bkp():
-    bkp = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                       'demo', 'my_portfolio.html')
-    if not os.path.exists(bkp):
-        return 'Reference layout not found.', 404
-    with open(bkp, encoding='utf-8') as f:
-        return Response(f.read(), mimetype='text/html'), 200
+def _via_tunnel() -> bool:
+    return bool(request.headers.get('Cf-Connecting-Ip')
+                or request.headers.get('Cf-Ray')
+                or request.headers.get('X-Forwarded-For'))
+
+
+@app.route('/dashboard_pp', methods=['GET'])
+def dashboard_pp():
+    if _via_tunnel():
+        return 'Not found.', 404          # local-only: not reachable through the relay
+    return dashboard_main()
 
 
 # ---------------------------------------------------------------------------
