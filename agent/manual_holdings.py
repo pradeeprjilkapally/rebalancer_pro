@@ -165,4 +165,32 @@ def load(snapshot: dict | None = None) -> list[dict]:
             'unrealised_pnl': current_value - invested,
         })
 
+    # ---- Chit funds ---------------------------------------------------------
+    # A running chit's contributions are an investment. invested = explicit value,
+    # else monthly_sip × months_paid. current_value = explicit (realizable/drawn)
+    # value, else the invested amount (refined when Pradeep shares full data).
+    for chit in data.get('chits', []):
+        platform    = chit.get('platform', 'Chit Fund')
+        monthly     = float(chit.get('monthly_sip', 0) or 0)
+        months_paid = int(chit.get('months_paid', 0) or 0)
+        invested      = float(chit.get('invested', 0) or 0) or (monthly * months_paid)
+        current_value = float(chit.get('current_value', 0) or 0) or invested
+
+        print(f'  [manual] {platform}: chit invested ₹{invested:,.0f} '
+              f'({months_paid} × ₹{monthly:,.0f}), value ₹{current_value:,.0f}')
+
+        holdings.append({
+            'source':         'manual_chit',
+            'name':           f'{platform} (Chit)',
+            'security_id':    'CHIT',
+            'isin':           '',
+            'exchange':       'CHIT',
+            'quantity':       months_paid,
+            'avg_price':      monthly,
+            'ltp':            0,
+            'current_value':  current_value,
+            'cost_value':     invested,
+            'unrealised_pnl': current_value - invested,
+        })
+
     return holdings

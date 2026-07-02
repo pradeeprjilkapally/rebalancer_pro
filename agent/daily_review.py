@@ -22,13 +22,13 @@ from agent.notify import notify
 _MYDATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'mydata')
 
 
-def _manual_corpus_totals() -> tuple[float, float]:
-    """Return (manual_mf_value, manual_gold_value) from live prices + manual_holdings.json."""
+def _manual_corpus_totals() -> tuple[float, float, float]:
+    """Return (manual_mf, manual_gold, manual_chit) values from live prices + manual_holdings.json."""
     try:
         import json as _json
         manual_file = os.path.join(_MYDATA, 'manual_holdings.json')
         if not os.path.exists(manual_file):
-            return 0.0, 0.0
+            return 0.0, 0.0, 0.0
         manual = _json.load(open(manual_file))
 
         mf_value = 0.0
@@ -50,10 +50,17 @@ def _manual_corpus_totals() -> tuple[float, float]:
             if grams > 0 and gprice:
                 gold_value += grams * gprice
 
-        return mf_value, gold_value
+        chit_value = 0.0
+        for c in manual.get('chits', []):
+            monthly     = float(c.get('monthly_sip', 0) or 0)
+            months_paid = int(c.get('months_paid', 0) or 0)
+            invested    = float(c.get('invested', 0) or 0) or (monthly * months_paid)
+            chit_value += float(c.get('current_value', 0) or 0) or invested
+
+        return mf_value, gold_value, chit_value
     except Exception as e:
         print(f'  [review] manual corpus fetch failed: {e}')
-        return 0.0, 0.0
+        return 0.0, 0.0, 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -218,8 +225,8 @@ def run_paytm(send_slack: bool = True):
     print_portfolio(snapshot)
     rebalance            = analyse(snapshot)
     fire_data            = analyse_fire(snapshot)
-    manual_mf, manual_gold = _manual_corpus_totals()
-    fire_sugg            = fire_aligned_suggestions(snapshot, manual_mf=manual_mf, manual_gold=manual_gold)
+    manual_mf, manual_gold, manual_chit = _manual_corpus_totals()
+    fire_sugg            = fire_aligned_suggestions(snapshot, manual_mf=manual_mf, manual_gold=manual_gold, manual_chit=manual_chit)
     print_suggestions(rebalance)
 
     print(f"\n  FIRE: {fire_data['progress_pct']:.1f}% — ~{fire_data['years_to_fire']:.1f} yrs to go")
@@ -293,8 +300,8 @@ def run_zerodha(send_slack: bool = True):
     print_portfolio(snapshot)
     rebalance              = analyse(snapshot)
     fire_data              = analyse_fire(snapshot)
-    manual_mf, manual_gold = _manual_corpus_totals()
-    fire_sugg              = fire_aligned_suggestions(snapshot, manual_mf=manual_mf, manual_gold=manual_gold)
+    manual_mf, manual_gold, manual_chit = _manual_corpus_totals()
+    fire_sugg              = fire_aligned_suggestions(snapshot, manual_mf=manual_mf, manual_gold=manual_gold, manual_chit=manual_chit)
     print_suggestions(rebalance)
 
     print(f"\n  FIRE: {fire_data['progress_pct']:.1f}% — ~{fire_data['years_to_fire']:.1f} yrs to go")
