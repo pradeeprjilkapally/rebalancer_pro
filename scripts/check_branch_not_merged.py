@@ -10,8 +10,14 @@ Fails open if `gh` is unavailable/unauthed (never blocks a legitimate push just
 because tooling is down); blocks only when a merged PR is positively found.
 """
 import json
+import os
 import subprocess
 import sys
+
+# Query the fork explicitly — without --repo, `gh` defaults to `origin`
+# (the read-only upstream paytmmoney/pyPMClient), which has none of these PRs,
+# so the guard would silently never fire.
+_GH_REPO = os.getenv('GH_REPO', 'pradeeprjilkapally/rebalancer_pro')
 
 
 def merged_pr_number(gh_json: str) -> int | None:
@@ -36,7 +42,8 @@ def main() -> int:
         return 0
     try:
         out = subprocess.run(
-            ['gh', 'pr', 'list', '--head', branch, '--state', 'merged', '--json', 'number'],
+            ['gh', 'pr', 'list', '--repo', _GH_REPO,
+             '--head', branch, '--state', 'merged', '--json', 'number'],
             capture_output=True, text=True, timeout=15)
         if out.returncode != 0:
             return 0                          # gh missing/unauthed → fail open

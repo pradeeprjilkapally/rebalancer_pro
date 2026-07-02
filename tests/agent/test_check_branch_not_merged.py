@@ -20,3 +20,19 @@ def test_bad_json_fails_open():
 
 def test_first_pr_wins():
     assert mg.merged_pr_number('[{"number": 22}, {"number": 9}]') == 22
+
+
+def test_gh_query_targets_the_fork(monkeypatch):
+    # regression: the gh call MUST pass --repo <fork>, else it queries origin (upstream)
+    calls = []
+    class _R:
+        def __init__(self, out='', rc=0): self.stdout, self.returncode = out, rc
+    def fake_run(cmd, **k):
+        calls.append(cmd)
+        if cmd[:3] == ['git', 'rev-parse', '--abbrev-ref']:
+            return _R('feature/09-020726-x')
+        return _R('[]')
+    monkeypatch.setattr(mg.subprocess, 'run', fake_run)
+    mg.main()
+    gh_call = next(c for c in calls if c and c[0] == 'gh')
+    assert '--repo' in gh_call and mg._GH_REPO in gh_call
