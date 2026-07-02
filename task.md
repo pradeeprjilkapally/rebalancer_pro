@@ -48,6 +48,19 @@ re-sync from paytmmoney/pyPMClient). Full chore log lives in action_items.md.
 --------------------------------------------------------------------------------------------------
 
 Date:         2026-07-02
+Status:       complete 2026-07-02 — chit funds supported end-to-end (manual_chit source, FIRE corpus, dashboard card); fixed the invalid manual_holdings.json (trailing comma broke MF+gold); suite +4
+Task:         06-020726
+Goal:         Support self-managed chit funds as a manual holding — loaded from manual_holdings.json, valued, included in the FIRE corpus, shown on the dashboard — mirroring how manual MF is handled. Also fix the invalid JSON (trailing comma) that was breaking all manual holdings.
+Constraints:  Chits behave like manual_mf: in the corpus total, NOT in a category bucket, excluded from broker-equity totals and concentration trims. invested = explicit OR monthly_sip×months_paid; current_value = explicit OR invested (no invented values — placeholder shows ₹0 until Pradeep adds months_paid/data). Rigorous tests. Follow the deploy model (feature→develop→master).
+Inputs:       mydata/manual_holdings.json (chits array), agent/manual_holdings.py, fire_analyser.py, daily_review.py, rebalancer.py, webhook.py, dashboard_ping.py.
+Outputs:      manual_holdings.load() chits loop (source=manual_chit); manual_chit added to every source-exclusion filter; fire_aligned_suggestions gains manual_chit param + corpus term; daily_review _manual_corpus_totals returns 3-tuple; _build_chit_context + Chit Funds dashboard card (shown when value>0); tests. JSON fixed to valid.
+Done-check:   manual_holdings.load surfaces a manual_chit holding with invested=monthly×months_paid; explicit values win; FIRE corpus includes it; suite green; dashboard renders.
+Out-of-scope: Full chit valuation model (dividend/discount/drawn schedule) — awaiting Pradeep's full data; multiple-chit UI polish.
+
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
+Date:         2026-07-02
 Status:       complete 2026-07-02 — CI pr-flow guard blocks feature→master; feature/*→develop, develop→master; suite +6 tests
 Task:         05-020726
 Goal:         Enforce the deploy model's branch flow so a feature branch physically cannot merge straight to master — feature/* → develop → master — after Claude repeatedly PR'd feature→master.

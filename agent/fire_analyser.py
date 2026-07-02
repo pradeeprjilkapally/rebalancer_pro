@@ -53,15 +53,18 @@ def fire_aligned_suggestions(
     snapshot: dict,
     manual_mf: float = 0.0,
     manual_gold: float = 0.0,
+    manual_chit: float = 0.0,
 ) -> list:
     """
     Returns FIRE-aligned investment suggestions based on allocation gaps.
 
     manual_mf   — current value of manually-tracked mutual funds (e.g. ICICI Multi-Asset)
     manual_gold — current value of manually-tracked gold (e.g. Paytm Gold)
+    manual_chit — current value of manually-tracked chit funds
 
-    Both are included in the total corpus denominator so allocation percentages
-    reflect the full portfolio, not just broker equity.
+    All are included in the total corpus denominator so allocation percentages
+    reflect the full portfolio, not just broker equity. Like MF, chits sit in the
+    corpus but not in any single category bucket (no fixed asset split).
     """
     holdings = snapshot.get('holdings', [])
     snapshot_manual_mf = sum(
@@ -72,17 +75,23 @@ def fire_aligned_suggestions(
         h['current_value'] for h in holdings
         if h.get('source') == 'manual_gold'
     )
+    snapshot_manual_chit = sum(
+        h['current_value'] for h in holdings
+        if h.get('source') == 'manual_chit'
+    )
     external_manual_mf = 0.0 if snapshot_manual_mf else manual_mf
     external_manual_gold = 0.0 if snapshot_manual_gold else manual_gold
+    external_manual_chit = 0.0 if snapshot_manual_chit else manual_chit
 
-    total = snapshot['total_portfolio'] + external_manual_mf + external_manual_gold
+    total = (snapshot['total_portfolio'] + external_manual_mf
+             + external_manual_gold + external_manual_chit)
     if total <= 0:
         return []
 
     # Broker gold (Gold Bees ETF in equity holdings)
     broker_gold = sum(
         h['current_value'] for h in holdings
-        if h.get('source') not in ('manual_gold', 'manual_mf')
+        if h.get('source') not in ('manual_gold', 'manual_mf', 'manual_chit')
         and any(k in h['name'].upper() for k in ('GOLD', 'BEES'))
     )
     total_gold = broker_gold + snapshot_manual_gold + external_manual_gold
@@ -90,7 +99,7 @@ def fire_aligned_suggestions(
     # Broker pure equity (exclude Gold Bees)
     broker_equity = sum(
         h['current_value'] for h in holdings
-        if h.get('source') not in ('manual_gold', 'manual_mf')
+        if h.get('source') not in ('manual_gold', 'manual_mf', 'manual_chit')
         and not any(k in h['name'].upper() for k in ('GOLD', 'BEES'))
     )
 
