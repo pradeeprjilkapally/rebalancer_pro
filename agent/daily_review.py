@@ -51,11 +51,9 @@ def _manual_corpus_totals() -> tuple[float, float, float]:
                 gold_value += grams * gprice
 
         chit_value = 0.0
+        from agent.manual_holdings import chit_valuation
         for c in manual.get('chits', []):
-            monthly     = float(c.get('monthly_sip', 0) or 0)
-            months_paid = int(c.get('months_paid', 0) or 0)
-            invested    = float(c.get('invested', 0) or 0) or (monthly * months_paid)
-            chit_value += float(c.get('current_value', 0) or 0) or invested
+            chit_value += chit_valuation(c)['current_value']
 
         return mf_value, gold_value, chit_value
     except Exception as e:
