@@ -10,8 +10,10 @@ Gold price: live from IBJA via agent.gold_price (₹/gram)
 Returns holdings in the same dict shape used by portfolio.py so they merge
 seamlessly into the snapshot.
 """
+import calendar
 import json
 import os
+from datetime import datetime
 
 import requests
 
@@ -68,6 +70,64 @@ def _fetch_nav_mfapi(scheme_code: str) -> float | None:
     except Exception as e:
         print(f'  [manual] mfapi fallback failed for {scheme_code}: {e}')
     return None
+
+
+# ---------------------------------------------------------------------------
+# Chit valuation (shared by load(), the dashboard, and the FIRE corpus)
+# ---------------------------------------------------------------------------
+
+def _num(v) -> float | None:
+    """A value only if it's genuinely numeric — formula strings return None."""
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str) and v.strip().replace('.', '', 1).isdigit():
+        return float(v)
+    return None
+
+
+def chit_valuation(chit: dict, now: datetime | None = None) -> dict:
+    """
+    Value one chit entry.
+    - months_paid: a numeric months_paid wins; else computed from Start_Month
+      ("<Month>-<YYYY>") to `now`, floored at 0 and capped at tenure_months.
+    - invested = numeric `invested`, else monthly_installment × months_paid.
+    - current_value = numeric `current_value`, else invested.
+    Formula-string fields (e.g. "Current Month - Start_Month") are treated as
+    "compute this", not literal values.
+    """
+    now = now or datetime.now()
+    monthly = float(chit.get('monthly_installment', 0) or chit.get('monthly_sip', 0) or 0)
+    tenure  = int(chit.get('tenure_months', 0) or 0)
+
+    months_paid = _num(chit.get('months_paid'))
+    if months_paid is None:
+        start = chit.get('Start_Month') or chit.get('start_month')
+        try:
+            sd = datetime.strptime(str(start).strip(), '%B-%Y')
+            diff = (now.year - sd.year) * 12 + (now.month - sd.month)
+            if diff < 0:                              # chit starts in the future
+                months_paid = 0
+            else:
+                # The first installment is due IN Start_Month, so count the current
+                # month once its due day has arrived (installments-due ≈ paid, for an
+                # on-time payer). sip_day: an int day, or "last day of month".
+                dim = calendar.monthrange(now.year, now.month)[1]
+                sip_day = chit.get('sip_day')
+                if isinstance(sip_day, (int, float)) or (isinstance(sip_day, str) and sip_day.strip().isdigit()):
+                    due_day = min(int(sip_day), dim)   # day-31 in a 30-day month → the 30th
+                else:                                  # "last day of month" / unspecified
+                    due_day = dim
+                months_paid = diff + (1 if now.day >= due_day else 0)
+        except (ValueError, TypeError, AttributeError):
+            months_paid = 0
+    months_paid = int(months_paid)
+    if tenure:
+        months_paid = min(months_paid, tenure)
+
+    invested      = _num(chit.get('invested')) or (monthly * months_paid)
+    current_value = _num(chit.get('current_value')) or invested
+    return {'monthly': monthly, 'tenure': tenure, 'months_paid': months_paid,
+            'invested': invested, 'current_value': current_value}
 
 
 # ---------------------------------------------------------------------------
@@ -166,18 +226,14 @@ def load(snapshot: dict | None = None) -> list[dict]:
         })
 
     # ---- Chit funds ---------------------------------------------------------
-    # A running chit's contributions are an investment. invested = explicit value,
-    # else monthly_sip × months_paid. current_value = explicit (realizable/drawn)
-    # value, else the invested amount (refined when Pradeep shares full data).
+    # months_paid computed from Start_Month; invested = installment × months_paid;
+    # current_value = explicit or invested. See chit_valuation() for the rules.
     for chit in data.get('chits', []):
-        platform    = chit.get('platform', 'Chit Fund')
-        monthly     = float(chit.get('monthly_sip', 0) or 0)
-        months_paid = int(chit.get('months_paid', 0) or 0)
-        invested      = float(chit.get('invested', 0) or 0) or (monthly * months_paid)
-        current_value = float(chit.get('current_value', 0) or 0) or invested
+        platform = chit.get('platform', 'Chit Fund')
+        v = chit_valuation(chit)
 
-        print(f'  [manual] {platform}: chit invested ₹{invested:,.0f} '
-              f'({months_paid} × ₹{monthly:,.0f}), value ₹{current_value:,.0f}')
+        print(f"  [manual] {platform}: {v['months_paid']} × ₹{v['monthly']:,.0f} "
+              f"= invested ₹{v['invested']:,.0f}, value ₹{v['current_value']:,.0f}")
 
         holdings.append({
             'source':         'manual_chit',
@@ -185,12 +241,12 @@ def load(snapshot: dict | None = None) -> list[dict]:
             'security_id':    'CHIT',
             'isin':           '',
             'exchange':       'CHIT',
-            'quantity':       months_paid,
-            'avg_price':      monthly,
+            'quantity':       v['months_paid'],
+            'avg_price':      v['monthly'],
             'ltp':            0,
-            'current_value':  current_value,
-            'cost_value':     invested,
-            'unrealised_pnl': current_value - invested,
+            'current_value':  v['current_value'],
+            'cost_value':     v['invested'],
+            'unrealised_pnl': v['current_value'] - v['invested'],
         })
 
     return holdings

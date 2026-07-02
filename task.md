@@ -48,6 +48,19 @@ re-sync from paytmmoney/pyPMClient). Full chore log lives in action_items.md.
 --------------------------------------------------------------------------------------------------
 
 Date:         2026-07-02
+Status:       complete 2026-07-02 — chit value date-based + sip_day-aware (Fable-reviewed off-by-one: current month counts once due day arrives); 2 chits = ₹2.88L+₹32k; own card, out of diversification; suite +9
+Task:         07-020726
+Goal:         Value chit funds from the real manual_holdings.json schema (monthly_installment + Start_Month), computing months_paid = months since Start_Month (capped at tenure). Keep chits in their own card, out of the diversification layout (like MF).
+Constraints:  Formula-string fields (months_paid="Current Month - Start_Month", current_value="months_paid * monthly_installment") are computed, not read literally. Numeric overrides win. months_paid floored at 0, capped at tenure_months. Shared chit_valuation() used by loader + dashboard + FIRE corpus (one source of truth). Chits excluded from the diversification donut/buckets (already true). Rigorous tests. feature→develop→master.
+Inputs:       mydata/manual_holdings.json (2 chits, date schema), agent/manual_holdings.py, webhook.py (_build_chit_context), daily_review.py.
+Outputs:      manual_holdings.chit_valuation() (Start_Month→months_paid, invested, current_value); loader + _build_chit_context + _manual_corpus_totals all use it; tests (date math, formula-strings, capping, numeric-override, future-start).
+Done-check:   Chit 1 (Jan-2025) = 18×16000 = ₹2,88,000; Chit 2 (May-2026) = 2×16000 = ₹32,000; Chit Funds card shows ₹3,20,000, excluded from diversification; suite green.
+Out-of-scope: Full chit dividend/discount/drawn-amount model; per-chit dashboard drill-down.
+
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
+Date:         2026-07-02
 Status:       complete 2026-07-02 — chit funds supported end-to-end (manual_chit source, FIRE corpus, dashboard card); fixed the invalid manual_holdings.json (trailing comma broke MF+gold); suite +4
 Task:         06-020726
 Goal:         Support self-managed chit funds as a manual holding — loaded from manual_holdings.json, valued, included in the FIRE corpus, shown on the dashboard — mirroring how manual MF is handled. Also fix the invalid JSON (trailing comma) that was breaking all manual holdings.
