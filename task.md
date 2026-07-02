@@ -48,6 +48,19 @@ re-sync from paytmmoney/pyPMClient). Full chore log lives in action_items.md.
 --------------------------------------------------------------------------------------------------
 
 Date:         2026-07-02
+Status:       complete 2026-07-02 — pre-push merge-guard blocks pushing to a merged-PR branch (stops the 4×-recurring orphaned-commit bug); discipline documented; suite +4
+Task:         08-020726
+Goal:         Stop the recurring bug where a follow-up commit is orphaned because its PR merged at an earlier commit — happened 4×. Block, at push time, any push to a branch whose PR is already merged; document the "no follow-up pushes to a merged PR" discipline.
+Constraints:  Enforced locally at the exact moment of orphaning (pre-push). Fail OPEN if gh is unavailable/unauthed (never block a legit push on tooling). Only block when a merged PR is positively found. Pure, unit-tested parse logic. feature→develop→master.
+Inputs:       scripts/hooks/pre-push, gh CLI, CLAUDE.md/AGENTS.md conventions.
+Outputs:      scripts/check_branch_not_merged.py (gh pr list --head <b> --state merged → block) wired as pre-push gate 0; tests; CLAUDE.md/AGENTS.md discipline note (one push per PR, new fix = new branch, merge-self-to-close-race).
+Done-check:   guard blocks a push when the branch has a merged PR, allows otherwise; fails open without gh; suite green.
+Out-of-scope: Branch protection / required-checks (unavailable on this plan); changing GitHub merge behaviour.
+
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
+Date:         2026-07-02
 Status:       complete 2026-07-02 — chit value date-based + sip_day-aware (Fable-reviewed off-by-one: current month counts once due day arrives); 2 chits = ₹2.88L+₹32k; own card, out of diversification; suite +9
 Task:         07-020726
 Goal:         Value chit funds from the real manual_holdings.json schema (monthly_installment + Start_Month), computing months_paid = months since Start_Month (capped at tenure). Keep chits in their own card, out of the diversification layout (like MF).
