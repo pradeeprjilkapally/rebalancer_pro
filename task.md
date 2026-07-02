@@ -47,6 +47,32 @@ re-sync from paytmmoney/pyPMClient). Full chore log lives in action_items.md.
 --------------------------------------------------------------------------------------------------
 --------------------------------------------------------------------------------------------------
 
+Date:         2026-07-02
+Status:       complete 2026-07-02 — chit funds supported end-to-end (manual_chit source, FIRE corpus, dashboard card); fixed the invalid manual_holdings.json (trailing comma broke MF+gold); suite +4
+Task:         06-020726
+Goal:         Support self-managed chit funds as a manual holding — loaded from manual_holdings.json, valued, included in the FIRE corpus, shown on the dashboard — mirroring how manual MF is handled. Also fix the invalid JSON (trailing comma) that was breaking all manual holdings.
+Constraints:  Chits behave like manual_mf: in the corpus total, NOT in a category bucket, excluded from broker-equity totals and concentration trims. invested = explicit OR monthly_sip×months_paid; current_value = explicit OR invested (no invented values — placeholder shows ₹0 until Pradeep adds months_paid/data). Rigorous tests. Follow the deploy model (feature→develop→master).
+Inputs:       mydata/manual_holdings.json (chits array), agent/manual_holdings.py, fire_analyser.py, daily_review.py, rebalancer.py, webhook.py, dashboard_ping.py.
+Outputs:      manual_holdings.load() chits loop (source=manual_chit); manual_chit added to every source-exclusion filter; fire_aligned_suggestions gains manual_chit param + corpus term; daily_review _manual_corpus_totals returns 3-tuple; _build_chit_context + Chit Funds dashboard card (shown when value>0); tests. JSON fixed to valid.
+Done-check:   manual_holdings.load surfaces a manual_chit holding with invested=monthly×months_paid; explicit values win; FIRE corpus includes it; suite green; dashboard renders.
+Out-of-scope: Full chit valuation model (dividend/discount/drawn schedule) — awaiting Pradeep's full data; multiple-chit UI polish.
+
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
+Date:         2026-07-02
+Status:       complete 2026-07-02 — CI pr-flow guard blocks feature→master; feature/*→develop, develop→master; suite +6 tests
+Task:         05-020726
+Goal:         Enforce the deploy model's branch flow so a feature branch physically cannot merge straight to master — feature/* → develop → master — after Claude repeatedly PR'd feature→master.
+Constraints:  GitHub-side enforcement (a CI check on pull_request that can't be bypassed locally). Pure, unit-tested flow logic. Don't block release/* or unknown patterns. This task itself follows the model: feature → develop → master.
+Inputs:       .github/workflows/, the deploy-model convention in CLAUDE.md/AGENTS.md.
+Outputs:      scripts/check_pr_flow.py (feature/*→develop, develop→master; else allowed) + .github/workflows/pr-flow.yml (runs it on PRs); tests; CLAUDE.md/AGENTS.md document the enforced flow.
+Done-check:   check_pr_flow blocks feature→master (exit 1) and passes feature→develop / develop→master; suite green; workflow runs on pull_request.
+Out-of-scope: Branch protection rules (not available on this plan); auto-merging; changing the deploy scripts.
+
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
 Date:         2026-07-01
 Status:       complete 2026-07-01 — task.md now the total ledger; pre-push guard (check_task_tracked) enforces branch→task mapping; conventions rewritten; history backfilled; suite +6 guard tests
 Task:         01-010726
@@ -56,6 +82,46 @@ Inputs:       CLAUDE.md/AGENTS.md working-conventions, scripts/hooks/pre-push, g
 Outputs:      scripts/check_task_tracked.py (branch→task.md guard) wired into pre-push; CLAUDE.md/AGENTS.md convention rewritten (task.md = everything; action_items = explicit manual-only; rigorous tests; entry-at-start); backfilled complete-status task.md entries for shipped-but-untracked features (Slack migration, CI alerts, cross-agent parity, tunnel fixes); tests for the guard.
 Done-check:   check_task_tracked passes for a branch with a documented task and fails for one without; suite green incl. new guard tests; pre-push runs the guard; backfilled entries present; conventions updated in both CLAUDE.md and AGENTS.md.
 Out-of-scope: Rewriting historical commits; changing the branch→PR→merge flow; auto-generating task entries without precise context.
+
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
+Date:         2026-07-01
+Status:       complete 2026-07-02 — deploy pipeline: /dashboard_pp (local-only preview) + scripts/deploy.py (dev/prod) + deploy skill (both dirs) + docs; suite 127
+Task:         02-010726
+Goal:         Add a staged deploy pipeline so "merged" reliably becomes "live" (the gap that caused stale data): feature/<taskID-goal> → develop → master, with develop previewed on a LOCAL-ONLY dashboard_pp (:5002 worktree) before promoting to the public dashboard_main (:5001, master).
+Constraints:  App-specific (rebalancer_pro only). dashboard_pp must be local-only — served by a second webhook on 127.0.0.1:5002 from a `develop` git worktree, which the tunnel never exposes (no relay/Access change). Production (:5001, master, dashboard_main via relay) is unchanged. Preview shares .env/tokens/mydata with prod via symlink (reviewing code, not data). Rigorous tests. Track per the new rule.
+Inputs:       agent/webhook.py (/dashboard_bkp route), agent/tunnel_manager.py (exposes :5001 only), launchd, git worktree.
+Outputs:      rename /dashboard_bkp → /dashboard_pp; scripts/deploy.py (deploy dev → refresh :5002 develop worktree; deploy prod → pull master + restart :5001 + refresh); deploy skill in both skill dirs; CLAUDE.md/AGENTS.md document the pipeline; tests for deploy helpers + the route rename.
+Done-check:   `deploy prod` pulls+restarts :5001 and dashboard_main serves 200; `deploy dev` starts :5002 from the develop worktree and dashboard_pp serves 200 locally only (not via relay); suite green; route renamed.
+Out-of-scope: Editing the Cloudflare Worker/relay; CI-based deploys; multi-machine. (Bootstrapping: this first task ships via a direct PR; future tasks follow feature→develop→master.)
+
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
+Date:         2026-07-02
+Status:       pending — parked 2026-07-02 (Pradeep will take up later today)
+Task:         03-020726
+Goal:         Python model-router so the workflow can switch models per phase — Opus for planning, Sonnet for building, Haiku for test execution — invoked when needed.
+Constraints:  Realistic mechanism: orchestrate via Claude Code sub-agents (Agent tool `model` override) or the Anthropic SDK for a standalone router; document the cold-start/context trade-off; keep rigorous test DESIGN on Sonnet/Opus (Haiku executes, doesn't author edge cases). App-agnostic helper, no secrets logged.
+Inputs:       the Agent tool model override, Anthropic SDK, this repo's task flow.
+Outputs:      TBD when picked up — a `scripts/model_router.py` and/or a documented sub-agent convention.
+Done-check:   TBD.
+Out-of-scope: TBD.
+(Note: logged in task.md per the convention — it's agent-doable, so not action_items. Flag if you'd rather it in action_items.)
+
+--------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------
+
+Date:         2026-07-02
+Status:       pending — parked 2026-07-02 (recommended by Claude)
+Task:         04-020726
+Goal:         Harden the sanity-check token-freshness check to validate REAL broker session validity, not just the token file's mtime — it reported "OK" while the Paytm session was actually expired.
+Constraints:  A cheap validity probe (a lightweight authed call) without burning rate limits; fail-open on network blips; no secrets logged. Rigorous tests.
+Inputs:       agent/sanity_check.py (check_tokens), agent/auth.py, agent/brokers/zerodha.py.
+Outputs:      TBD — a validity check replacing/augmenting the mtime heuristic.
+Done-check:   TBD — check flags an expired session even when the token file is recent.
+Out-of-scope: TBD.
 
 --------------------------------------------------------------------------------------------------
 BACKFILL — shipped work that predated the tracking rule (documented retroactively by 01-010726)

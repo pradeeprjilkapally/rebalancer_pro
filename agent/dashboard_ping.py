@@ -119,7 +119,7 @@ def _broker_total(data: dict) -> float:
     equity = sum(
         h.get('current_value', 0)
         for h in holdings
-        if h.get('source', 'broker') not in ('manual_gold', 'manual_mf')
+        if h.get('source', 'broker') not in ('manual_gold', 'manual_mf', 'manual_chit')
     )
     return equity + snapshot.get('available_cash', 0)
 

@@ -713,7 +713,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
           <th class="r">Value</th><th class="r">Alloc</th><th class="r">P&amp;L</th>
         </tr></thead>
         <tbody>
-          {% for h in b.snapshot.holdings if h.get('source','') not in ('manual_gold','manual_mf') %}
+          {% for h in b.snapshot.holdings if h.get('source','') not in ('manual_gold', 'manual_mf', 'manual_chit') %}
           <tr>
             <td class="font-medium text-white">{{ h.name }}</td>
             <td class="r">{{ '{:.0f}'.format(h.quantity) }}</td>
@@ -827,6 +827,47 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
       </div>
       <div class="text-[11px] text-muted mt-3 leading-relaxed">
         Not forced into target allocation until the fund-level asset split is explicitly tracked.
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Manual Chit funds -->
+  {% if chit_summary %}
+  <div class="card overflow-hidden" id="card-chit-summary">
+    <div class="card-toggle p-4 border-b border-[#1e2d4a] flex justify-between items-center" onclick="toggleCard('chit-summary')">
+      <div class="flex items-center gap-2.5">
+        <div class="w-2.5 h-2.5 rounded-full bg-[#10B981]"></div>
+        <div>
+          <div class="font-semibold text-white text-[14px]">Chit Funds</div>
+          <div class="text-[11px] text-muted">Tracked separately · included in FIRE</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-right">
+          <div class="font-bold text-white text-[16px] tabular-nums money">₹{{ inr(chit_summary.current_value) }}</div>
+          <div class="text-[11px] {{ 'text-success' if chit_summary.pnl >= 0 else 'text-danger' }} tabular-nums">
+            {{ '+' if chit_summary.pnl >= 0 else '' }}{{ '{:.1f}'.format(chit_summary.pnl_pct) }}%
+          </div>
+        </div>
+        <span class="chevron material-symbols-outlined text-muted text-[18px]">expand_less</span>
+      </div>
+    </div>
+    <div id="card-body-chit-summary" class="p-4">
+      <div class="grid grid-cols-2 gap-3 text-[11px]">
+        <div>
+          <div class="text-muted uppercase tracking-wider mb-1">Invested</div>
+          <div class="font-semibold text-white money">₹{{ inr(chit_summary.invested) }}</div>
+        </div>
+        <div>
+          <div class="text-muted uppercase tracking-wider mb-1">P&amp;L</div>
+          <div class="font-semibold {{ 'text-success' if chit_summary.pnl >= 0 else 'text-danger' }} money">
+            {{ '+' if chit_summary.pnl >= 0 else '' }}₹{{ inr(chit_summary.pnl) }}
+          </div>
+        </div>
+      </div>
+      <div class="text-[11px] text-muted mt-3 leading-relaxed">
+        Contributions in the corpus; not force-bucketed (no fixed asset split).
       </div>
     </div>
   </div>
@@ -1139,7 +1180,7 @@ def _build_fire_context(mf_funds: list[dict], gold_ctx: dict | None) -> dict | N
             return 0.0
         return sum(
             h.get('current_value', 0) for h in data.get('snapshot', {}).get('holdings', [])
-            if h.get('source', 'broker') not in ('manual_gold', 'manual_mf')
+            if h.get('source', 'broker') not in ('manual_gold', 'manual_mf', 'manual_chit')
         )
 
     paytm_equity   = equity_only(paytm)
@@ -1223,6 +1264,39 @@ def _build_mf_context() -> list[dict]:
             'pnl_pct':       (pnl / invested * 100) if invested > 0 else 0,
             'avg_nav':       (invested / units) if units > 0 else 0,
             'notes':         mf.get('notes', ''),
+        })
+    return result
+
+
+def _build_chit_context() -> list[dict]:
+    """Read manual_holdings.json chit entries → list for the template.
+    invested = explicit, else monthly_sip × months_paid; value = explicit, else invested."""
+    manual_file = os.path.join(_MYDATA, 'manual_holdings.json')
+    if not os.path.exists(manual_file):
+        return []
+    try:
+        manual = json.load(open(manual_file))
+    except Exception:
+        return []
+
+    result = []
+    for c in manual.get('chits', []):
+        monthly     = float(c.get('monthly_sip', 0) or 0)
+        months_paid = int(c.get('months_paid', 0) or 0)
+        invested      = float(c.get('invested', 0) or 0) or (monthly * months_paid)
+        current_value = float(c.get('current_value', 0) or 0) or invested
+        pnl = current_value - invested
+        result.append({
+            'name':          c.get('platform', 'Chit Fund'),
+            'chit_value':    float(c.get('chit_value', 0) or 0),
+            'tenure_months': int(c.get('tenure_months', 0) or 0),
+            'monthly_sip':   monthly,
+            'months_paid':   months_paid,
+            'invested':      invested,
+            'current_value': current_value,
+            'pnl':           pnl,
+            'pnl_pct':       (pnl / invested * 100) if invested > 0 else 0,
+            'notes':         c.get('notes', ''),
         })
     return result
 
@@ -1313,7 +1387,7 @@ def dashboard_main():
             equity_only = sum(
                 h.get('current_value', 0)
                 for h in data['snapshot'].get('holdings', [])
-                if h.get('source', 'broker') not in ('manual_gold', 'manual_mf')
+                if h.get('source', 'broker') not in ('manual_gold', 'manual_mf', 'manual_chit')
             )
             data['display_total'] = equity_only + data['snapshot'].get('available_cash', 0)
             brokers.append(data)
@@ -1331,10 +1405,12 @@ def dashboard_main():
     fire      = _build_fire_context(mf_funds, gold)
     generated = next((b['generated_at'] for b in brokers if not b.get('placeholder')), 'No data')
 
+    chit_funds = _build_chit_context()
     broker_total    = sum(b['display_total'] for b in brokers)
     mf_total        = sum(m['current_value'] for m in mf_funds)
     gold_total      = gold['current_value'] if gold else 0.0
-    total_portfolio = broker_total + mf_total + gold_total
+    chit_total      = sum(c['current_value'] for c in chit_funds)
+    total_portfolio = broker_total + mf_total + gold_total + chit_total
     mf_invested     = sum(m['invested'] for m in mf_funds)
     mf_summary      = None
     if mf_total > 0:
@@ -1344,6 +1420,15 @@ def dashboard_main():
             'invested':      mf_invested,
             'pnl':           mf_pnl,
             'pnl_pct':       (mf_pnl / mf_invested * 100) if mf_invested else 0.0,
+        }
+    chit_invested = sum(c['invested'] for c in chit_funds)
+    chit_summary  = None
+    if chit_total > 0:
+        chit_summary = {
+            'current_value': chit_total,
+            'invested':      chit_invested,
+            'pnl':           chit_total - chit_invested,
+            'pnl_pct':       ((chit_total - chit_invested) / chit_invested * 100) if chit_invested else 0.0,
         }
     diversification_total = broker_total + gold_total
 
@@ -1367,7 +1452,7 @@ def dashboard_main():
         if b.get('placeholder'):
             continue
         for h in b['snapshot'].get('holdings', []):
-            if h.get('source') in ('manual_gold', 'manual_mf'):
+            if h.get('source') in ('manual_gold', 'manual_mf', 'manual_chit'):
                 continue
             uname = h['name'].upper()
             val   = h.get('current_value', 0)
@@ -1403,7 +1488,7 @@ def dashboard_main():
     return render_template_string(
         _DASHBOARD_HTML, brokers=brokers, generated=generated,
         gold=gold, mf_funds=mf_funds, fire=fire,
-        mf_summary=mf_summary, total_portfolio=total_portfolio,
+        mf_summary=mf_summary, chit_summary=chit_summary, total_portfolio=total_portfolio,
         diversification_total=diversification_total,
         diversification=diversification,
     ), 200
@@ -1867,18 +1952,25 @@ const obs=new IntersectionObserver(entries=>{
 
 
 # ---------------------------------------------------------------------------
-# Route: saved reference layout (/dashboard_bkp)
-# Serves the static premium-layout snapshot kept in demo/my_portfolio.html
+# Route: preview dashboard (/dashboard_pp) — LOCAL ONLY.
+# The SAME live dashboard as /dashboard_main, but served for reviewing develop
+# before promotion. In the deploy pipeline the preview webhook (:5002, develop
+# worktree) serves this. Any request arriving via the Cloudflare tunnel/relay
+# (which sets Cf-Connecting-Ip) is rejected, so dashboard_pp is never public on
+# either instance.
 # ---------------------------------------------------------------------------
 
-@app.route('/dashboard_bkp', methods=['GET'])
-def dashboard_bkp():
-    bkp = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                       'demo', 'my_portfolio.html')
-    if not os.path.exists(bkp):
-        return 'Reference layout not found.', 404
-    with open(bkp, encoding='utf-8') as f:
-        return Response(f.read(), mimetype='text/html'), 200
+def _via_tunnel() -> bool:
+    return bool(request.headers.get('Cf-Connecting-Ip')
+                or request.headers.get('Cf-Ray')
+                or request.headers.get('X-Forwarded-For'))
+
+
+@app.route('/dashboard_pp', methods=['GET'])
+def dashboard_pp():
+    if _via_tunnel():
+        return 'Not found.', 404          # local-only: not reachable through the relay
+    return dashboard_main()
 
 
 # ---------------------------------------------------------------------------
